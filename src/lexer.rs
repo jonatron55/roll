@@ -1,21 +1,60 @@
+// Copyright 2024 Jonathon Cobb
+// Licensed under the ISC license
+
+//! Lexical analyzer for dice expressions.
+//!
+//! Dice expressions are broken into tokens according to the following rules:
+//!
+//! - Whitespace is discarded as it is encountered and is only significant when
+//!   separating words or integers.
+//! - Contiguous sequences of decimal digits as tokenized as integers.
+//! - Contiguous sequences of alphabetic characters are tokenized as words. The
+//!   following words are recognized as valid: `d`, `k`, `kh`, `kl`, `dh`, `dl`,
+//!  `adv`, `dis`, `da`, `ad`.
+//! - Words not listed above must not appear in the expression.
+//! - The following symbols are recognized as distinct tokens: `+`, `-`, `*`,
+//!   `/`, `%`, `(`, `)`, `[`, `]`. The symbols `×` and `÷` are also recognized
+//!   as equivalent to `*` and `/`, respectively.
+//! - No other characters may appear in the expression.
+
 use core::panic;
 use std::str::CharIndices;
 
 const VALID_WORDS: &'static [&'static str] = &["d", "k", "kh", "kl", "dh", "dl", "adv", "dis", "da", "ad"];
 
+/// The types of tokens that can be produced by the lexer.
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Token<'a> {
+    /// An integer literal.
     Integer(i32),
+
+    /// A recognized word.
     Word(&'a str),
+
+    /// The symbol `+`.
     Plus,
+
+    /// The symbol `-`.
     Minus,
+
+    /// The symbol `*` or `×`.
     Times,
+
+    /// The symbol `/` or `÷`.
     Divide,
+
+    /// The symbol `%`.
     Percent,
+
+    /// The symbol `(` or `[`.
     Open(char),
+
+    /// The symbol `)` or `]`.
     Close(char),
 }
 
+/// A lexical analyzer for dice expressions. The lexer implements an `Iterator`
+/// over tokens in the input expression.
 pub struct Lexer<'a> {
     input: &'a str,
     chars: CharIndices<'a>,
@@ -61,10 +100,12 @@ impl<'a> Iterator for Lexer<'a> {
         }
 
         let Some(ch) = self.peek() else {
+            // End of input
             return None;
         };
 
         if ch.is_digit(10) {
+            // Consume an integer (take all contiguous digits)
             let i = self.peek_position();
 
             while self.next().map_or(false, |c| c.is_digit(10)) {}
@@ -75,6 +116,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
 
         if ch.is_alphabetic() {
+            // Consume a word (take all contiguous alphabetic characters)
             let i = self.peek_position();
 
             while self.next().map_or(false, |c| c.is_alphabetic()) {}
@@ -89,6 +131,7 @@ impl<'a> Iterator for Lexer<'a> {
             return Some(Token::Word(word));
         }
 
+        // Otherwise, consume a single-character symbol
         self.next();
         match ch {
             '+' => Some(Token::Plus),
@@ -100,7 +143,7 @@ impl<'a> Iterator for Lexer<'a> {
             '[' => Some(Token::Open('[')),
             ')' => Some(Token::Close(')')),
             ']' => Some(Token::Close(']')),
-            _ => None,
+            _ => panic!("Invalid character: \"{}\"", ch),
         }
     }
 }

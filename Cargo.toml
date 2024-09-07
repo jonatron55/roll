@@ -2,6 +2,9 @@
 name = "roll"
 version = "0.1.0"
 edition = "2021"
+authors = ["Jonathon Cobb"]
+license = "ISC"
+description = "A simple program to parse and evaluate dice expressions using typical notation"
 
 [dependencies]
 rand = "0.8.5"

@@ -1,40 +1,81 @@
+// Copyright 2024 Jonathon Cobb
+// Licensed under the ISC license
+
+//! This module contains an evaluator for dice expressions that traverses an
+//! AST and returns the result of the expression.
+
 use std::{fmt::Display, ops::Range};
 
 use rand::Rng;
 
 use crate::ast::{
-    Add, Divide, Literal, Multiply, Negate, Node, Roll, Select, Selection, Subtract, Visitor,
+    Add, Div, Lit, Mul, Neg, Node, Roll, Select, Selection, Sub, Visitor,
     VisitorResult,
 };
 
+/// Possible ways to evaluate dice rolls.
 pub enum Evaluation<TRng: Rng> {
-    Random(TRng),
+    /// Randomly generate each die roll.
+    Rand(TRng),
+
+    /// Evaluate the expression as if all dice rolls were 1.
     Min,
+
+    /// Evaluate the expression as if all dice rolls landed in the middle of
+    /// their range (rounded down).
     Mid,
+
+    /// Evaluate the expression as if all dice rolls were the highest possible.
     Max,
 }
 
-#[derive(Debug)]
+/// A single die roll.
 pub struct DieRoll {
+    /// The number of sides on the die. May be 4, 6, 8, 10, 12, 20, or 100.
     pub sides: i32,
+
+    /// The result of the roll.
     pub result: i32,
+
+    /// Whether the roll was kept or discarded during a selection operation.
     pub keep: bool,
 }
 
+/// An implementation of the `Visitor` trait that evaluates each node in the AST
+/// using a stack and returns the result of the expression along with the
+/// individual die rolls.
 pub struct Evaluator<TRng: Rng> {
+    /// The rolls made during the evaluation.
     pub rolls: Vec<DieRoll>,
+
+    /// The evaluation strategy to use.
     evaluation: Evaluation<TRng>,
+
+    /// A stack of intermediate results. Once the traversal is complete, the
+    /// stack should contain a single value representing the result of the
+    /// expression.
     results: Vec<i32>,
+
+    /// A stack of dice pools that are being selected from. Pools are ranges
+    /// over the `rolls` vector and are pushed when a new roll is made and
+    /// then modified by selection operations.
     dice_pools: Vec<Range<usize>>,
 }
 
+/// Possible errors that can occur during evaluation.
 #[derive(Debug)]
 pub enum Error {
+    /// A selection operation (`kh`, `dl`, etc.) involves selecting more dice
+    /// than are available after rolling and applying previous selections.
     InvalidSelection {
         selection_size: usize,
         pool_size: usize,
     },
+
+    /// An attempt was made to divide by zero.
     DivideByZero,
+
+    /// The stack was empty when an operation expected a value.
     StackUnderflow,
 }
 
@@ -57,7 +98,7 @@ impl<TRng: Rng> Evaluator<TRng> {
 }
 
 impl<TRng: Rng> Visitor for Evaluator<TRng> {
-    fn literal(&mut self, node: &Literal) -> VisitorResult {
+    fn lit(&mut self, node: &Lit) -> VisitorResult {
         self.results.push(node.value);
         Ok(())
     }
@@ -75,7 +116,7 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
 
         for _ in 0..count {
             let roll = match &mut self.evaluation {
-                Evaluation::Random(rng) => rng.gen_range(1..sides + 1),
+                Evaluation::Rand(rng) => rng.gen_range(1..sides + 1),
                 Evaluation::Min => 1,
                 Evaluation::Mid => sides / 2,
                 Evaluation::Max => sides,
@@ -173,7 +214,7 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
                 for i in pool.clone() {
                     let sides = self.rolls[i].sides;
                     let roll = match &mut self.evaluation {
-                        Evaluation::Random(rng) => rng.gen_range(1..sides + 1),
+                        Evaluation::Rand(rng) => rng.gen_range(1..sides + 1),
                         Evaluation::Min => 1,
                         Evaluation::Mid => sides / 2,
                         Evaluation::Max => sides,
@@ -214,7 +255,7 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
         }
     }
 
-    fn negate(&mut self, node: &Negate) -> VisitorResult {
+    fn neg(&mut self, node: &Neg) -> VisitorResult {
         node.right.accept(self)?;
         let Some(right) = self.results.pop() else {
             return Err(Box::new(Error::StackUnderflow));
@@ -237,7 +278,7 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
         Ok(())
     }
 
-    fn subtract(&mut self, node: &Subtract) -> VisitorResult {
+    fn sub(&mut self, node: &Sub) -> VisitorResult {
         node.left.accept(self)?;
         let Some(left) = self.results.pop() else {
             return Err(Box::new(Error::StackUnderflow));
@@ -251,7 +292,7 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
         Ok(())
     }
 
-    fn multiply(&mut self, node: &Multiply) -> VisitorResult {
+    fn mul(&mut self, node: &Mul) -> VisitorResult {
         node.left.accept(self)?;
         let Some(left) = self.results.pop() else {
             return Err(Box::new(Error::StackUnderflow));
@@ -265,7 +306,7 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
         Ok(())
     }
 
-    fn divide(&mut self, node: &Divide) -> VisitorResult {
+    fn div(&mut self, node: &Div) -> VisitorResult {
         node.left.accept(self)?;
         let Some(left) = self.results.pop() else {
             return Err(Box::new(Error::StackUnderflow));

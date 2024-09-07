@@ -1,3 +1,8 @@
+// Copyright 2024 Jonathon Cobb
+// Licensed under the ISC license
+
+/// A lookahead over an iterator that allows peeking at the next item without
+/// consuming it.
 pub struct Lookahead<TIter: Iterator<Item: Copy>>{
     iter: TIter,
     peek: Option<TIter::Item>,

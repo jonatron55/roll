@@ -1,3 +1,6 @@
+// Copyright 2024 Jonathon Cobb
+// Licensed under the ISC license
+
 mod ast;
 mod eval;
 mod lexer;
@@ -9,6 +12,10 @@ use std::{env, process::exit};
 use parser::parse;
 
 fn main() {
+    // The expression to evaluate is given on the command line and may be
+    // preceded  by 'min', 'mid', or 'max' to specify the evaluation strategy.
+    // The remaining arguments (or all arguments if no strategy is given) are
+    // concatenated to form a single expression.
     let mut args = env::args().map(|arg| arg.to_lowercase());
     args.next();
     let mut arg = args.next();
@@ -26,7 +33,7 @@ fn main() {
             arg = args.next();
             eval::Evaluation::Max
         }
-        Some(_) => eval::Evaluation::Random(rand::thread_rng()),
+        Some(_) => eval::Evaluation::Rand(rand::thread_rng()),
         None => exit(0),
     };
 
@@ -40,6 +47,7 @@ fn main() {
         }
     }
 
+    // Attempt to parse the input expression.
     let root = parse(input.as_str());
 
     if let Err(err) = root {
@@ -47,6 +55,7 @@ fn main() {
         exit(1);
     }
 
+    // Attempt to evaluate the parsed expression.
     let mut evaluator = eval::Evaluator::new(evaluation);
     let result = evaluator.eval(root.unwrap().as_ref());
 

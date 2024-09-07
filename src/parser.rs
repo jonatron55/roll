@@ -1,33 +1,38 @@
-// Recursive descent parser for dice expressions matching the following grammar:
-//
-// root -> sum
-// sum -> term [('+' | '-') term]
-// term -> product | sum
-// product -> factor [('*' | '/') factor]
-// factor -> '(' sum ')' | negation |integer | roll | product
-// negation -> '-' factor
-// roll -> [integer] 'd' [integer] [selection]
-// selection -> ('k' integer | 'kh' integer | 'kl' integer | 'dh' integer | 'dl' integer | 'adv' | 'dis' | 'da' | 'ad') [selection]
+// Copyright 2024 Jonathon Cobb
+// Licensed under the ISC license
+
+//! A recursive descent parser for dice expressions. See `README.md` for a
+//! formal grammar of the language.
 
 use std::fmt::Display;
 
-use crate::ast::{Add, Divide, Literal, Multiply, Negate, Node, Roll, Select, Selection, Subtract};
+use crate::ast::{Add, Div, Lit, Mul, Neg, Node, Roll, Select, Selection, Sub};
 use crate::lexer::{Lexer, Token};
 use crate::lookahead::Lookahead;
 
 type LookaheadLexer<'a> = Lookahead<Lexer<'a>>;
 
+/// Parsing errors.
 #[derive(Debug)]
 pub enum Error {
+    /// A token was encountered at an unexpected position.
     UnexpectedToken(String),
+
+    /// The end of the input was reached unexpectedly.
     UnexpectedEnd(String),
+
+    /// A die with an invalid number of sides was encountered.
     InvalidDie(String),
+
+    /// A closing parenthesis was encountered that did not match an opening
+    /// parenthesis.
     MismatchedParentheses(String),
 }
 
 type Result = std::result::Result<Box<dyn Node>, Error>;
 type ResultOption = std::result::Result<Option<Box<dyn Node>>, Error>;
 
+/// Parse a dice expression into an abstract syntax tree.
 pub fn parse<'a>(input: &'a str) -> Result {
     let lexer = Lexer::new(input);
     let mut lexer = Lookahead::new(lexer);
@@ -43,10 +48,18 @@ pub fn parse<'a>(input: &'a str) -> Result {
     }
 }
 
+/// Parse the production rule:
+/// ```text
+/// root -> sum
+/// ```
 fn parse_root(lexer: &mut LookaheadLexer) -> Result {
     parse_sum(lexer)
 }
 
+/// Parse the production rule:
+/// ```text
+/// sum -> term [('+' | '-') term]
+/// ```
 fn parse_sum(lexer: &mut LookaheadLexer) -> Result {
     let term = parse_term(lexer)?;
 
@@ -60,13 +73,17 @@ fn parse_sum(lexer: &mut LookaheadLexer) -> Result {
         Some(Token::Minus) => {
             lexer.next();
             let right = parse_term(lexer)?;
-            Ok(Box::new(Subtract { left: term, right }))
+            Ok(Box::new(Sub { left: term, right }))
         }
 
         _ => Ok(term),
     }
 }
 
+/// Parse the production rule:
+/// ```text
+/// term -> product | sum
+/// ```
 fn parse_term(lexer: &mut LookaheadLexer) -> Result {
     let product = parse_product(lexer)?;
 
@@ -83,7 +100,7 @@ fn parse_term(lexer: &mut LookaheadLexer) -> Result {
         Some(Token::Minus) => {
             lexer.next();
             let right = parse_product(lexer)?;
-            Ok(Box::new(Subtract {
+            Ok(Box::new(Sub {
                 left: product,
                 right,
             }))
@@ -93,6 +110,10 @@ fn parse_term(lexer: &mut LookaheadLexer) -> Result {
     }
 }
 
+/// Parse the production rule:
+/// ```text
+/// product -> factor [('*' | '/') factor]
+/// ```
 fn parse_product(lexer: &mut LookaheadLexer) -> Result {
     let factor = parse_factor(lexer)?;
 
@@ -100,7 +121,7 @@ fn parse_product(lexer: &mut LookaheadLexer) -> Result {
         Some(Token::Times) => {
             lexer.next();
             let right = parse_factor(lexer)?;
-            Ok(Box::new(Multiply {
+            Ok(Box::new(Mul {
                 left: factor,
                 right,
             }))
@@ -109,7 +130,7 @@ fn parse_product(lexer: &mut LookaheadLexer) -> Result {
         Some(Token::Divide) => {
             lexer.next();
             let right = parse_factor(lexer)?;
-            Ok(Box::new(Divide {
+            Ok(Box::new(Div {
                 left: factor,
                 right,
             }))
@@ -119,6 +140,10 @@ fn parse_product(lexer: &mut LookaheadLexer) -> Result {
     }
 }
 
+/// Parse the production rule:
+/// ```text
+/// factor -> '(' sum ')' | negation | integer | roll | product
+/// ```
 fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
     let token = lexer.peek().cloned();
 
@@ -161,12 +186,12 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
                 Some(Token::Times) | Some(Token::Divide) => {
                     lexer.next();
                     let right = parse_factor(lexer)?;
-                    Ok(Box::new(Multiply {
-                        left: Box::new(Literal { value: n }),
+                    Ok(Box::new(Mul {
+                        left: Box::new(Lit { value: n }),
                         right,
                     }))
                 }
-                _ => Ok(Box::new(Literal { value: n })),
+                _ => Ok(Box::new(Lit { value: n })),
             }
         }
 
@@ -175,7 +200,7 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
         Some(Token::Minus) => {
             lexer.next();
             let right = parse_factor(lexer)?;
-            Ok(Box::new(Negate { right }))
+            Ok(Box::new(Neg { right }))
         }
 
         Some(other) => Err(Error::UnexpectedToken(format!(
@@ -187,6 +212,11 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
     }
 }
 
+
+/// Parse the production rule:
+/// ```text
+/// roll -> [integer] 'd' [integer] [selection]
+/// ```
 fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
     let token = lexer.peek();
     match token {
@@ -199,8 +229,8 @@ fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
                         lexer.next();
                         let select = parse_selection(lexer)?;
                         Ok(Box::new(Roll {
-                            count: Box::new(Literal { value: count }),
-                            sides: Box::new(Literal { value: sides }),
+                            count: Box::new(Lit { value: count }),
+                            sides: Box::new(Lit { value: sides }),
                             select,
                         }))
                     }
@@ -210,16 +240,16 @@ fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
                     lexer.next();
                     let select = parse_selection(lexer)?;
                     Ok(Box::new(Roll {
-                        count: Box::new(Literal { value: count }),
-                        sides: Box::new(Literal { value: 100 }),
+                        count: Box::new(Lit { value: count }),
+                        sides: Box::new(Lit { value: 100 }),
                         select,
                     }))
                 }
                 _ => {
                     let select = parse_selection(lexer)?;
                     Ok(Box::new(Roll {
-                        count: Box::new(Literal { value: count }),
-                        sides: Box::new(Literal { value: 6 }),
+                        count: Box::new(Lit { value: count }),
+                        sides: Box::new(Lit { value: 6 }),
                         select,
                     }))
                 }
@@ -232,6 +262,19 @@ fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
     }
 }
 
+/// Parse the production rule:
+/// ```text
+/// selection -> (
+///         'k' integer |
+///         'kh' integer |
+///         'kl' integer |
+///         'd' integer |
+///         'dh' integer |
+///         'dl' integer |
+///         'adv' | 'ad' |
+///         'dis' | 'da'
+///     ) [selection]
+/// ```
 fn parse_selection(lexer: &mut LookaheadLexer) -> ResultOption {
     let token = lexer.peek();
     match token {
@@ -257,7 +300,7 @@ fn parse_selection(lexer: &mut LookaheadLexer) -> ResultOption {
                     lexer.next();
                     Ok(Some(Box::new(Select {
                         selection,
-                        count: Some(Box::new(Literal { value: n })),
+                        count: Some(Box::new(Lit { value: n })),
                         next: parse_selection(lexer)?,
                     })))
                 }
