@@ -12,7 +12,7 @@ use crate::ast::{
     Add, Div, Lit, Mul, Neg, Node, Roll, Select, Selection, Sub, Visitor, VisitorResult,
 };
 
-/// A pretty-printer for dice expressions.
+/// A Graphviz DOT writer for dice expressions.
 pub struct DotWriter<'o, W: Write> {
     /// The writer to which the pretty-printed expression is written.
     writer: &'o mut W,

@@ -60,7 +60,7 @@ pub enum Selection {
     /// Reroll the previous expression and keep the higher total.
     Advantage,
 
-    /// Reroll the previous expression and keep the higher total.
+    /// Reroll the previous expression and keep the lower total.
     Disadvantage,
 }
 
