@@ -6,10 +6,12 @@ mod eval;
 mod lexer;
 mod lookahead;
 mod parser;
+mod pp;
 
-use std::{env, process::exit};
+use std::{env, io::stdout, process::exit};
 
 use parser::parse;
+use pp::PP;
 
 fn main() {
     // The expression to evaluate is given on the command line and may be
@@ -55,9 +57,17 @@ fn main() {
         exit(1);
     }
 
+    let root = root.unwrap();
+
+    // Echo the parsed expression.
+    let mut stdout = stdout();
+    let mut pp = PP::new(&mut stdout);
+    root.accept(&mut pp).unwrap();
+    println!();
+
     // Attempt to evaluate the parsed expression.
     let mut evaluator = eval::Evaluator::new(evaluation);
-    let result = evaluator.eval(root.unwrap().as_ref());
+    let result = evaluator.eval(root.as_ref());
 
     match result {
         Ok(result) => {
