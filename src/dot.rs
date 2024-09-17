@@ -35,8 +35,11 @@ impl<'o, W: Write> DotWriter<'o, W> {
 
     pub fn write(&mut self, root: &dyn Node) -> VisitorResult {
         writeln!(self.writer, "graph {{")?;
-        writeln!(self.writer, "    node [shape=\"rect\"]")?;
-        writeln!(self.writer, "    edge [fontsize=\"10\"]")?;
+        writeln!(
+            self.writer,
+            "    node [shape=rect,style=rounded,fontname=Arial]"
+        )?;
+        writeln!(self.writer, "    edge [fontsize=10,fontname=Arial]")?;
         root.accept(self)?;
         writeln!(self.writer, "}}")?;
         Ok(())
@@ -69,9 +72,9 @@ impl<'o, W: Write> Visitor for DotWriter<'o, W> {
     fn roll(&mut self, node: &Roll) -> VisitorResult {
         let id = self.write_node("Roll")?;
         node.count.accept(self)?;
-        node.sides.accept(self)?;
-
         let count_id = self.id_stack.pop().unwrap();
+
+        node.sides.accept(self)?;
         let sides_id = self.id_stack.pop().unwrap();
 
         self.write_edge(&id, &count_id, "count")?;
@@ -128,8 +131,9 @@ impl<'o, W: Write> Visitor for DotWriter<'o, W> {
         let id = self.write_node("Add")?;
 
         node.left.accept(self)?;
-        node.right.accept(self)?;
         let left_id = self.id_stack.pop().unwrap();
+
+        node.right.accept(self)?;
         let right_id = self.id_stack.pop().unwrap();
 
         self.write_edge(&id, &left_id, "left")?;
@@ -143,8 +147,9 @@ impl<'o, W: Write> Visitor for DotWriter<'o, W> {
         let id = self.write_node("Subtract")?;
 
         node.left.accept(self)?;
-        node.right.accept(self)?;
         let left_id = self.id_stack.pop().unwrap();
+
+        node.right.accept(self)?;
         let right_id = self.id_stack.pop().unwrap();
 
         self.write_edge(&id, &left_id, "left")?;
@@ -158,8 +163,9 @@ impl<'o, W: Write> Visitor for DotWriter<'o, W> {
         let id = self.write_node("Multiply")?;
 
         node.left.accept(self)?;
-        node.right.accept(self)?;
         let left_id = self.id_stack.pop().unwrap();
+
+        node.right.accept(self)?;
         let right_id = self.id_stack.pop().unwrap();
 
         self.write_edge(&id, &left_id, "left")?;
@@ -173,8 +179,9 @@ impl<'o, W: Write> Visitor for DotWriter<'o, W> {
         let id = self.write_node("Divide")?;
 
         node.left.accept(self)?;
-        node.right.accept(self)?;
         let left_id = self.id_stack.pop().unwrap();
+
+        node.right.accept(self)?;
         let right_id = self.id_stack.pop().unwrap();
 
         self.write_edge(&id, &left_id, "left")?;
