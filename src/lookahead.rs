@@ -3,17 +3,14 @@
 
 /// A lookahead over an iterator that allows peeking at the next item without
 /// consuming it.
-pub struct Lookahead<TIter: Iterator<Item: Copy>>{
+pub struct Lookahead<TIter: Iterator<Item: Clone>> {
     iter: TIter,
     peek: Option<TIter::Item>,
 }
 
-impl<TIter: Iterator<Item: Copy>> Lookahead<TIter> {
+impl<TIter: Iterator<Item: Clone>> Lookahead<TIter> {
     pub fn new(iter: TIter) -> Self {
-        let mut lookahead = Lookahead {
-            iter,
-            peek: None,
-        };
+        let mut lookahead = Lookahead { iter, peek: None };
         lookahead.next();
         lookahead
     }
@@ -24,7 +21,7 @@ impl<TIter: Iterator<Item: Copy>> Lookahead<TIter> {
 
     pub fn next(&mut self) -> Option<TIter::Item> {
         let next = self.iter.next();
-        self.peek = next;
+        self.peek = next.clone();
         next
     }
 }

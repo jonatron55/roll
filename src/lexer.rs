@@ -17,8 +17,11 @@
 //!   as equivalent to `*` and `/`, respectively.
 //! - No other characters may appear in the expression.
 
-use core::panic;
-use std::str::CharIndices;
+use std::{
+    error::Error as StdError,
+    fmt::{Display, Formatter, Result as FmtResult},
+    str::CharIndices,
+};
 
 const VALID_WORDS: &'static [&'static str] =
     &["d", "k", "kh", "kl", "dh", "dl", "adv", "dis", "da", "ad"];
@@ -62,6 +65,12 @@ pub struct Lexer<'a> {
     current: Option<(usize, char)>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum Error {
+    InvalidCharacter(char),
+    InvalidWord(String),
+}
+
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Lexer<'a> {
         let chars = input.char_indices();
@@ -81,23 +90,23 @@ impl<'a> Lexer<'a> {
         self.current.map_or(self.input.len(), |(i, _)| i)
     }
 
-    fn next(&mut self) -> Option<char> {
+    fn next_char(&mut self) -> Option<char> {
         self.current = self.chars.next();
         self.peek()
     }
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Token<'a>;
+    type Item = Result<Token<'a>, Error>;
 
-    fn next(&mut self) -> Option<Token<'a>> {
+    fn next(&mut self) -> Option<Result<Token<'a>, Error>> {
         if self.current.is_none() {
             self.current = self.chars.next();
         }
 
         // Consume whitespace
         while self.peek().map_or(false, |c| c.is_whitespace()) {
-            self.next();
+            self.next_char();
         }
 
         let Some(ch) = self.peek() else {
@@ -109,42 +118,69 @@ impl<'a> Iterator for Lexer<'a> {
             // Consume an integer (take all contiguous digits)
             let i = self.peek_position();
 
-            while self.next().map_or(false, |c| c.is_digit(10)) {}
+            while self.next_char().map_or(false, |c| c.is_digit(10)) {}
 
             let j = self.peek_position();
 
-            return Some(Token::Integer(self.input[i..j].parse().unwrap()));
+            return Some(Ok(Token::Integer(self.input[i..j].parse().unwrap())));
         }
 
         if ch.is_alphabetic() {
             // Consume a word (take all contiguous alphabetic characters)
             let i = self.peek_position();
 
-            while self.next().map_or(false, |c| c.is_alphabetic()) {}
+            while self.next_char().map_or(false, |c| c.is_alphabetic()) {}
 
             let j = self.peek_position();
             let word = &self.input[i..j];
 
             if !VALID_WORDS.contains(&word) {
-                panic!("Invalid word: \"{}\"", word);
+                return Some(Err(Error::InvalidWord(word.to_string())));
             }
 
-            return Some(Token::Word(word));
+            return Some(Ok(Token::Word(word)));
         }
 
         // Otherwise, consume a single-character symbol
-        self.next();
+        self.next_char();
         match ch {
-            '+' => Some(Token::Plus),
-            '-' => Some(Token::Minus),
-            '*' | '×' => Some(Token::Times),
-            '/' | '÷' => Some(Token::Divide),
-            '%' => Some(Token::Percent),
-            '(' => Some(Token::Open('(')),
-            '[' => Some(Token::Open('[')),
-            ')' => Some(Token::Close(')')),
-            ']' => Some(Token::Close(']')),
-            _ => panic!("Invalid character: \"{}\"", ch),
+            '+' => Some(Ok(Token::Plus)),
+            '-' => Some(Ok(Token::Minus)),
+            '*' | '×' => Some(Ok(Token::Times)),
+            '/' | '÷' => Some(Ok(Token::Divide)),
+            '%' => Some(Ok(Token::Percent)),
+            '(' => Some(Ok(Token::Open('('))),
+            '[' => Some(Ok(Token::Open('['))),
+            ')' => Some(Ok(Token::Close(')'))),
+            ']' => Some(Ok(Token::Close(']'))),
+            _ => Some(Err(Error::InvalidCharacter(ch))),
+        }
+    }
+}
+
+impl<'a> Display for Token<'a> {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            Token::Integer(i) => write!(f, "{}", i),
+            Token::Word(word) => write!(f, "{}", word),
+            Token::Plus => write!(f, "+"),
+            Token::Minus => write!(f, "-"),
+            Token::Times => write!(f, "×"),
+            Token::Divide => write!(f, "/"),
+            Token::Percent => write!(f, "%"),
+            Token::Open(ch) => write!(f, "{ch}"),
+            Token::Close(ch) => write!(f, "{ch}"),
+        }
+    }
+}
+
+impl StdError for Error {}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            Error::InvalidCharacter(ch) => write!(f, "Invalid character '{}'", ch),
+            Error::InvalidWord(word) => write!(f, "Invalid word '{}'", word),
         }
     }
 }

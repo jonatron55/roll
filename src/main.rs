@@ -46,7 +46,7 @@ fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
     let root = parse(input.as_str());
 
     if let Err(err) = root {
-        eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {:?}\x1B[39m", err);
+        eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {err}\x1B[39m");
         exit(1);
     }
 
@@ -69,10 +69,10 @@ fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
             }
 
             println!();
-            println!("\x1B[2mtotal = \x1B[22m\x1B[1m{}\x1B[22m", result);
+            println!("\x1B[2mtotal = \x1B[22m\x1B[1m{result}\x1B[22m");
         }
         Err(err) => {
-            eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {:?}\x1B[39m", err);
+            eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {err}\x1B[39m");
             exit(1);
         }
     };
@@ -95,7 +95,7 @@ fn graph(lang: Option<String>, args: &mut impl Iterator<Item = String>) {
     let root = parse(input.as_str());
 
     if let Err(err) = root {
-        eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {:?}\x1B[39m", err);
+        eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {err}\x1B[39m");
         exit(1);
     }
 

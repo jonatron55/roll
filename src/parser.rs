@@ -7,7 +7,7 @@
 use std::fmt::Display;
 
 use crate::ast::{Add, Div, Lit, Mul, Neg, Node, Roll, Select, Selection, Sub};
-use crate::lexer::{Lexer, Token};
+use crate::lexer::{Error as LexError, Lexer, Token};
 use crate::lookahead::Lookahead;
 
 type LookaheadLexer<'a> = Lookahead<Lexer<'a>>;
@@ -27,6 +27,9 @@ pub enum Error {
     /// A closing parenthesis was encountered that did not match an opening
     /// parenthesis.
     MismatchedParentheses(String),
+
+    /// An error occurred in the lexer.
+    LexError(LexError),
 }
 
 type Result = std::result::Result<Box<dyn Node>, Error>;
@@ -36,15 +39,14 @@ type ResultOption = std::result::Result<Option<Box<dyn Node>>, Error>;
 pub fn parse<'a>(input: &'a str) -> Result {
     let lexer = Lexer::new(input);
     let mut lexer = Lookahead::new(lexer);
-    let root = parse_root(&mut lexer);
+    let root = parse_root(&mut lexer)?;
 
-    if lexer.peek().is_some() {
-        Err(Error::UnexpectedToken(format!(
-            "Unexpected leftover token: {:?}",
-            lexer.peek()
-        )))
-    } else {
-        root
+    match lexer.peek() {
+        Some(Ok(token)) => Err(Error::UnexpectedToken(format!(
+            "Unexpected leftover token: '{token}'"
+        ))),
+        Some(Err(err)) => Err(err.into()),
+        _ => Ok(root),
     }
 }
 
@@ -65,16 +67,17 @@ fn parse_sum(lexer: &mut LookaheadLexer) -> Result {
 
     loop {
         match lexer.peek() {
-            Some(Token::Plus) => {
+            Some(Ok(Token::Plus)) => {
                 lexer.next();
                 let right = parse_term(lexer)?;
                 left = Box::new(Add { left, right });
             }
-            Some(Token::Minus) => {
+            Some(Ok(Token::Minus)) => {
                 lexer.next();
                 let right = parse_term(lexer)?;
                 left = Box::new(Sub { left, right });
             }
+            Some(Err(err)) => return Err(err.into()),
             _ => break,
         }
     }
@@ -90,16 +93,17 @@ fn parse_term(lexer: &mut LookaheadLexer) -> Result {
 
     loop {
         match lexer.peek() {
-            Some(Token::Times) => {
+            Some(Ok(Token::Times)) => {
                 lexer.next();
                 let right = parse_factor(lexer)?;
                 left = Box::new(Mul { left, right });
             }
-            Some(Token::Divide) => {
+            Some(Ok(Token::Divide)) => {
                 lexer.next();
                 let right = parse_factor(lexer)?;
                 left = Box::new(Div { left, right });
             }
+            Some(Err(err)) => return Err(err.into()),
             _ => break,
         }
     }
@@ -115,12 +119,12 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
     let token = lexer.peek().cloned();
 
     match token {
-        Some(Token::Open(open_ch)) => {
+        Some(Ok(Token::Open(open_ch))) => {
             lexer.next();
             let sum = parse_sum(lexer)?;
 
             match lexer.peek().cloned() {
-                Some(Token::Close(close_ch)) => {
+                Some(Ok(Token::Close(close_ch))) => {
                     lexer.next();
                     match (open_ch, close_ch) {
                         ('(', ')') => Ok(sum),
@@ -130,10 +134,10 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
                         ))),
                     }
                 }
-                Some(other) => Err(Error::UnexpectedToken(format!(
-                    "{:?} unexpected in parenthetical",
-                    other
+                Some(Ok(other)) => Err(Error::UnexpectedToken(format!(
+                    "'{other}' unexpected in parenthetical",
                 ))),
+                Some(Err(err)) => return Err(err.into()),
                 None => Err(Error::UnexpectedEnd(format!(
                     "Expression ended without closing '{}'",
                     match open_ch {
@@ -145,26 +149,27 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
             }
         }
 
-        Some(Token::Integer(n)) => {
+        Some(Ok(Token::Integer(n))) => {
             let token = lexer.next();
 
             match &token {
-                Some(Token::Word("d")) => parse_roll(lexer, n),
+                Some(Ok(Token::Word("d"))) => parse_roll(lexer, n),
                 _ => Ok(Box::new(Lit { value: n })),
             }
         }
 
-        Some(Token::Word("d")) => parse_roll(lexer, 1),
+        Some(Ok(Token::Word("d"))) => parse_roll(lexer, 1),
 
-        Some(Token::Minus) => {
+        Some(Ok(Token::Minus)) => {
             lexer.next();
             let right = parse_factor(lexer)?;
             Ok(Box::new(Neg { right }))
         }
 
-        Some(other) => Err(Error::UnexpectedToken(format!(
-            "{:?} unexpected in factor",
-            other
+        Some(Err(err)) => return Err(err.into()),
+
+        Some(Ok(other)) => Err(Error::UnexpectedToken(format!(
+            "'{other}' unexpected in factor",
         ))),
 
         None => Err(Error::UnexpectedEnd("Unexpected end of input".to_string())),
@@ -178,11 +183,11 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
 fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
     let token = lexer.peek();
     match token {
-        Some(Token::Word("d")) => {
+        Some(Ok(Token::Word("d"))) => {
             let token = lexer.next();
 
             match token {
-                Some(Token::Integer(sides)) => match sides {
+                Some(Ok(Token::Integer(sides))) => match sides {
                     4 | 6 | 8 | 10 | 12 | 20 | 100 => {
                         lexer.next();
                         let select = parse_selection(lexer)?;
@@ -194,7 +199,7 @@ fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
                     }
                     _ => Err(Error::InvalidDie(format!("Invalid die: d{sides}"))),
                 },
-                Some(Token::Percent) => {
+                Some(Ok(Token::Percent)) => {
                     lexer.next();
                     let select = parse_selection(lexer)?;
                     Ok(Box::new(Roll {
@@ -203,6 +208,9 @@ fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
                         select,
                     }))
                 }
+
+                Some(Err(err)) => return Err(err.into()),
+
                 _ => {
                     let select = parse_selection(lexer)?;
                     Ok(Box::new(Roll {
@@ -213,10 +221,14 @@ fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
                 }
             }
         }
-        _ => Err(Error::UnexpectedToken(format!(
-            "{:?} unexpected in roll",
-            token
+
+        Some(Err(err)) => return Err(err.into()),
+
+        Some(Ok(other)) => Err(Error::UnexpectedToken(format!(
+            "'{other}' unexpected in roll",
         ))),
+
+        None => Err(Error::UnexpectedEnd("Unexpected end of input".to_string())),
     }
 }
 
@@ -236,25 +248,25 @@ fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
 fn parse_selection(lexer: &mut LookaheadLexer) -> ResultOption {
     let token = lexer.peek();
     match token {
-        Some(Token::Word("k"))
-        | Some(Token::Word("kh"))
-        | Some(Token::Word("kl"))
-        | Some(Token::Word("d"))
-        | Some(Token::Word("dh"))
-        | Some(Token::Word("dl")) => {
+        Some(Ok(Token::Word("k")))
+        | Some(Ok(Token::Word("kh")))
+        | Some(Ok(Token::Word("kl")))
+        | Some(Ok(Token::Word("d")))
+        | Some(Ok(Token::Word("dh")))
+        | Some(Ok(Token::Word("dl"))) => {
             let selection = match token {
-                Some(Token::Word("k")) => Selection::KeepHighest,
-                Some(Token::Word("kh")) => Selection::KeepHighest,
-                Some(Token::Word("kl")) => Selection::KeepLowest,
-                Some(Token::Word("d")) => Selection::DropLowest,
-                Some(Token::Word("dh")) => Selection::DropHighest,
-                Some(Token::Word("dl")) => Selection::DropLowest,
+                Some(Ok(Token::Word("k"))) => Selection::KeepHighest,
+                Some(Ok(Token::Word("kh"))) => Selection::KeepHighest,
+                Some(Ok(Token::Word("kl"))) => Selection::KeepLowest,
+                Some(Ok(Token::Word("d"))) => Selection::DropLowest,
+                Some(Ok(Token::Word("dh"))) => Selection::DropHighest,
+                Some(Ok(Token::Word("dl"))) => Selection::DropLowest,
                 _ => unreachable!(),
             };
 
             let token = lexer.next();
             match token {
-                Some(Token::Integer(n)) => {
+                Some(Ok(Token::Integer(n))) => {
                     lexer.next();
                     Ok(Some(Box::new(Select {
                         selection,
@@ -262,6 +274,8 @@ fn parse_selection(lexer: &mut LookaheadLexer) -> ResultOption {
                         next: parse_selection(lexer)?,
                     })))
                 }
+
+                Some(Err(err)) => return Err(err.into()),
 
                 _ => Ok(Some(Box::new(Select {
                     selection,
@@ -271,7 +285,7 @@ fn parse_selection(lexer: &mut LookaheadLexer) -> ResultOption {
             }
         }
 
-        Some(Token::Word("adv")) | Some(Token::Word("ad")) => {
+        Some(Ok(Token::Word("adv"))) | Some(Ok(Token::Word("ad"))) => {
             lexer.next();
             Ok(Some(Box::new(Select {
                 selection: Selection::Advantage,
@@ -280,7 +294,7 @@ fn parse_selection(lexer: &mut LookaheadLexer) -> ResultOption {
             })))
         }
 
-        Some(Token::Word("dis")) | Some(Token::Word("da")) => {
+        Some(Ok(Token::Word("dis"))) | Some(Ok(Token::Word("da"))) => {
             lexer.next();
             Ok(Some(Box::new(Select {
                 selection: Selection::Disadvantage,
@@ -288,11 +302,21 @@ fn parse_selection(lexer: &mut LookaheadLexer) -> ResultOption {
                 next: parse_selection(lexer)?,
             })))
         }
+
+        Some(Err(err)) => return Err(err.into()),
+
         _ => Ok(None),
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::LexError(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -301,6 +325,19 @@ impl Display for Error {
             Error::UnexpectedEnd(message) => write!(f, "{message}"),
             Error::InvalidDie(message) => write!(f, "{message}"),
             Error::MismatchedParentheses(message) => write!(f, "{message}",),
+            Error::LexError(error) => write!(f, "{error}"),
         }
+    }
+}
+
+impl From<LexError> for Error {
+    fn from(error: LexError) -> Self {
+        Error::LexError(error)
+    }
+}
+
+impl From<&LexError> for Error {
+    fn from(error: &LexError) -> Self {
+        Error::LexError(error.clone())
     }
 }
