@@ -40,7 +40,7 @@ pub fn parse<'a>(input: &'a str) -> Result {
 
     if lexer.peek().is_some() {
         Err(Error::UnexpectedToken(format!(
-            "Unexpected token: {:?}",
+            "Unexpected leftover token: {:?}",
             lexer.peek()
         )))
     } else {
@@ -49,100 +49,67 @@ pub fn parse<'a>(input: &'a str) -> Result {
 }
 
 /// Parse the production rule:
-/// ```text
-/// root -> sum
+/// ```ebnf
+/// root = sum;
 /// ```
 fn parse_root(lexer: &mut LookaheadLexer) -> Result {
     parse_sum(lexer)
 }
 
 /// Parse the production rule:
-/// ```text
-/// sum -> term [('+' | '-') term]
+/// ```ebnf
+/// sum = term, { ("+" | "-"), term };
 /// ```
 fn parse_sum(lexer: &mut LookaheadLexer) -> Result {
-    let term = parse_term(lexer)?;
+    let mut left = parse_term(lexer)?;
 
-    match lexer.peek() {
-        Some(Token::Plus) => {
-            lexer.next();
-            let right: Box<dyn Node> = parse_term(lexer)?;
-            Ok(Box::new(Add { left: term, right }))
+    loop {
+        match lexer.peek() {
+            Some(Token::Plus) => {
+                lexer.next();
+                let right = parse_term(lexer)?;
+                left = Box::new(Add { left, right });
+            }
+            Some(Token::Minus) => {
+                lexer.next();
+                let right = parse_term(lexer)?;
+                left = Box::new(Sub { left, right });
+            }
+            _ => break,
         }
-
-        Some(Token::Minus) => {
-            lexer.next();
-            let right = parse_term(lexer)?;
-            Ok(Box::new(Sub { left: term, right }))
-        }
-
-        _ => Ok(term),
     }
-}
 
+    Ok(left)
+}
 /// Parse the production rule:
-/// ```text
-/// term -> product | sum
+/// ```ebnf
+/// term = factor, { ("*" | "/"), factor };
 /// ```
 fn parse_term(lexer: &mut LookaheadLexer) -> Result {
-    let product = parse_product(lexer)?;
+    let mut left = parse_factor(lexer)?;
 
-    match lexer.peek() {
-        Some(Token::Plus) => {
-            lexer.next();
-            let right = parse_product(lexer)?;
-            Ok(Box::new(Add {
-                left: product,
-                right,
-            }))
+    loop {
+        match lexer.peek() {
+            Some(Token::Times) => {
+                lexer.next();
+                let right = parse_factor(lexer)?;
+                left = Box::new(Mul { left, right });
+            }
+            Some(Token::Divide) => {
+                lexer.next();
+                let right = parse_factor(lexer)?;
+                left = Box::new(Div { left, right });
+            }
+            _ => break,
         }
-
-        Some(Token::Minus) => {
-            lexer.next();
-            let right = parse_product(lexer)?;
-            Ok(Box::new(Sub {
-                left: product,
-                right,
-            }))
-        }
-
-        _ => Ok(product),
     }
+
+    Ok(left)
 }
 
 /// Parse the production rule:
-/// ```text
-/// product -> factor [('*' | '/') factor]
-/// ```
-fn parse_product(lexer: &mut LookaheadLexer) -> Result {
-    let factor = parse_factor(lexer)?;
-
-    match lexer.peek() {
-        Some(Token::Times) => {
-            lexer.next();
-            let right = parse_factor(lexer)?;
-            Ok(Box::new(Mul {
-                left: factor,
-                right,
-            }))
-        }
-
-        Some(Token::Divide) => {
-            lexer.next();
-            let right = parse_factor(lexer)?;
-            Ok(Box::new(Div {
-                left: factor,
-                right,
-            }))
-        }
-
-        _ => Ok(factor),
-    }
-}
-
-/// Parse the production rule:
-/// ```text
-/// factor -> '(' sum ')' | negation | integer | roll | product
+/// ```ebnf
+/// factor = "(", sum, ")" | negation | integer | roll;
 /// ```
 fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
     let token = lexer.peek().cloned();
@@ -183,22 +150,6 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
 
             match &token {
                 Some(Token::Word("d")) => parse_roll(lexer, n),
-                Some(Token::Times) => {
-                    lexer.next();
-                    let right = parse_factor(lexer)?;
-                    Ok(Box::new(Mul {
-                        left: Box::new(Lit { value: n }),
-                        right,
-                    }))
-                }
-                Some(Token::Divide) => {
-                    lexer.next();
-                    let right = parse_factor(lexer)?;
-                    Ok(Box::new(Div {
-                        left: Box::new(Lit { value: n }),
-                        right,
-                    }))
-                }
                 _ => Ok(Box::new(Lit { value: n })),
             }
         }
@@ -221,8 +172,8 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
 }
 
 /// Parse the production rule:
-/// ```text
-/// roll -> [integer] 'd' [integer] [selection]
+/// ```ebnf
+/// roll = [integer], "d", [integer], [selection];
 /// ```
 fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
     let token = lexer.peek();
@@ -270,17 +221,17 @@ fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
 }
 
 /// Parse the production rule:
-/// ```text
-/// selection -> (
-///         'k' integer |
-///         'kh' integer |
-///         'kl' integer |
-///         'd' integer |
-///         'dh' integer |
-///         'dl' integer |
-///         'adv' | 'ad' |
-///         'dis' | 'da'
-///     ) [selection]
+/// ```ebnf
+/// selection = (
+///         "k", integer |
+///         "kh", integer |
+///         "kl", integer |
+///         "d", integer |
+///         "dh", integer |
+///         "dl", integer |
+///         "adv" | "ad" |
+///         "dis" | "da"
+///     ), [selection];
 /// ```
 fn parse_selection(lexer: &mut LookaheadLexer) -> ResultOption {
     let token = lexer.peek();

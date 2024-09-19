@@ -116,7 +116,7 @@ impl<'o, W: Write> Visitor for PP<'o, W> {
         self.prod = true;
 
         node.left.accept(self)?;
-        write!(self.writer, " * ")?;
+        write!(self.writer, " × ")?;
         node.right.accept(self)?;
 
         self.prod = was_prod;
