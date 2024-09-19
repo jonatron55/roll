@@ -2,8 +2,8 @@
 // Licensed under the ISC license
 
 mod ast;
-mod dot;
 mod eval;
+mod graph;
 mod lexer;
 mod lookahead;
 mod parser;
@@ -78,8 +78,10 @@ fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
     };
 }
 
-fn dot(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
+fn graph(lang: Option<String>, args: &mut impl Iterator<Item = String>) {
+    let mut arg = args.next();
     let mut input = String::new();
+
     loop {
         input.push_str(arg.unwrap().as_str());
         input.push_str(" ");
@@ -101,8 +103,13 @@ fn dot(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
 
     // Echo the parsed expression.
     let mut stdout = stdout();
-    let mut dot = dot::DotWriter::new(&mut stdout);
-    dot.write(root.as_ref()).unwrap();
+    let mut writer = match lang.as_deref() {
+        Some("dot") => graph::GraphWriter::new_dot(&mut stdout),
+        Some("mermaid") => graph::GraphWriter::new_mermaid(&mut stdout),
+        _ => unreachable!(),
+    };
+
+    writer.write(root.as_ref()).unwrap();
 }
 
 fn main() {
@@ -114,8 +121,8 @@ fn main() {
     args.next();
     let arg = args.next();
 
-    if let Some("dot") = arg.as_deref() {
-        dot(args.next(), &mut args);
+    if let Some("dot" | "mermaid") = arg.as_deref() {
+        graph(arg, &mut args);
     } else {
         eval(arg, &mut args);
     }

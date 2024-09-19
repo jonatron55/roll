@@ -20,7 +20,8 @@
 use core::panic;
 use std::str::CharIndices;
 
-const VALID_WORDS: &'static [&'static str] = &["d", "k", "kh", "kl", "dh", "dl", "adv", "dis", "da", "ad"];
+const VALID_WORDS: &'static [&'static str] =
+    &["d", "k", "kh", "kl", "dh", "dl", "adv", "dis", "da", "ad"];
 
 /// The types of tokens that can be produced by the lexer.
 #[derive(Debug, PartialEq, Clone, Copy)]

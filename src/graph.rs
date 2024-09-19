@@ -12,8 +12,13 @@ use crate::ast::{
     Add, Div, Lit, Mul, Neg, Node, Roll, Select, Selection, Sub, Visitor, VisitorResult,
 };
 
-/// A Graphviz DOT writer for dice expressions.
-pub struct DotWriter<'o, W: Write> {
+enum GraphLang {
+    Dot,
+    Mermaid,
+}
+
+/// Writes a graph of the AST to a writer in the Graphviz DOT or Mermaid format.
+pub struct GraphWriter<'o, W: Write> {
     /// The writer to which the pretty-printed expression is written.
     writer: &'o mut W,
 
@@ -22,47 +27,75 @@ pub struct DotWriter<'o, W: Write> {
 
     /// A stack of node identifiers to track the current path through the AST.
     id_stack: Vec<String>,
+
+    /// The language in which to write the graph.
+    lang: GraphLang,
 }
 
-impl<'o, W: Write> DotWriter<'o, W> {
-    pub fn new(writer: &'o mut W) -> Self {
+impl<'o, W: Write> GraphWriter<'o, W> {
+    pub fn new_dot(writer: &'o mut W) -> Self {
         Self {
             writer,
             next_id: 1,
             id_stack: Vec::new(),
+            lang: GraphLang::Dot,
+        }
+    }
+
+    pub fn new_mermaid(writer: &'o mut W) -> Self {
+        Self {
+            writer,
+            next_id: 1,
+            id_stack: Vec::new(),
+            lang: GraphLang::Mermaid,
         }
     }
 
     pub fn write(&mut self, root: &dyn Node) -> VisitorResult {
-        writeln!(self.writer, "graph {{")?;
-        writeln!(
-            self.writer,
-            "    node [shape=rect,style=rounded,fontname=Arial]"
-        )?;
-        writeln!(self.writer, "    edge [fontsize=10,fontname=Arial]")?;
+        match self.lang {
+            GraphLang::Dot => {
+                writeln!(self.writer, "graph {{")?;
+                writeln!(self.writer, "    graph [rankdir=TB]")?;
+                writeln!(self.writer, "    node [shape=rect]")?;
+                writeln!(self.writer, "    edge [fontsize=10]")?;
+            }
+            GraphLang::Mermaid => {
+                writeln!(self.writer, "graph TB")?;
+            }
+        }
+
         root.accept(self)?;
-        writeln!(self.writer, "}}")?;
+
+        match self.lang {
+            GraphLang::Dot => {
+                writeln!(self.writer, "}}")?;
+            }
+            GraphLang::Mermaid => {}
+        }
+
         Ok(())
     }
 
     fn write_node(&mut self, label: &str) -> Result<String, IoError> {
         let id = format!("node{:04x}", self.next_id);
         self.next_id += 1;
-        writeln!(self.writer, "    {} [label=\"{}\"]", id, label)?;
+        match self.lang {
+            GraphLang::Dot => writeln!(self.writer, "    {id} [label=\"{label}\"]")?,
+            GraphLang::Mermaid => writeln!(self.writer, "    {id}(\"{label}\")")?,
+        }
         Ok(id)
     }
 
     fn write_edge(&mut self, parent: &str, child: &str, label: &str) -> Result<(), IoError> {
-        writeln!(
-            self.writer,
-            "    {} -- {} [label=\"{}\"]",
-            parent, child, label
-        )?;
+        match self.lang {
+            GraphLang::Dot => writeln!(self.writer, "    {parent} -- {child} [label=\"{label}\"]")?,
+            GraphLang::Mermaid => writeln!(self.writer, "    {parent} --{label}--- {child}",)?,
+        }
         Ok(())
     }
 }
 
-impl<'o, W: Write> Visitor for DotWriter<'o, W> {
+impl<'o, W: Write> Visitor for GraphWriter<'o, W> {
     fn lit(&mut self, node: &Lit) -> VisitorResult {
         let id = self.write_node(&format!("{}", node.value))?;
         self.id_stack.push(id);

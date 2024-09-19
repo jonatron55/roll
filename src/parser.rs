@@ -183,10 +183,18 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
 
             match &token {
                 Some(Token::Word("d")) => parse_roll(lexer, n),
-                Some(Token::Times) | Some(Token::Divide) => {
+                Some(Token::Times) => {
                     lexer.next();
                     let right = parse_factor(lexer)?;
                     Ok(Box::new(Mul {
+                        left: Box::new(Lit { value: n }),
+                        right,
+                    }))
+                }
+                Some(Token::Divide) => {
+                    lexer.next();
+                    let right = parse_factor(lexer)?;
+                    Ok(Box::new(Div {
                         left: Box::new(Lit { value: n }),
                         right,
                     }))
@@ -211,7 +219,6 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
         None => Err(Error::UnexpectedEnd("Unexpected end of input".to_string())),
     }
 }
-
 
 /// Parse the production rule:
 /// ```text
