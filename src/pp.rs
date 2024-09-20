@@ -1,8 +1,8 @@
 // Copyright 2024 Jonathon Cobb
 // Licensed under the ISC license
 
-//! This module contains a pretty-printer for the dice expressions that traverses an
-//! AST and outputs a string representation of the expression.
+//! This module contains a pretty-printer for the dice expressions that
+//! traverses an AST and outputs a string representation of the expression.
 
 use std::io::Write;
 

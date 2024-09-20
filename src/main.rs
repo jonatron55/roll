@@ -9,10 +9,33 @@ mod lookahead;
 mod parser;
 mod pp;
 
-use std::{env, io::stdout, process::exit};
+use std::{env, fmt::Display, io::stdout, process::exit};
 
 use parser::parse;
 use pp::PP;
+
+fn ok_or_exit<T, E>(result: Result<T, E>) -> T
+where
+    E: Display,
+{
+    match result {
+        Ok(value) => value,
+        Err(err) => {
+            eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {err}\x1B[39m");
+            exit(1);
+        }
+    }
+}
+
+fn some_or_exit<T>(option: Option<T>, msg: &str) -> T {
+    match option {
+        Some(value) => value,
+        None => {
+            eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {msg}\x1B[39m");
+            exit(0)
+        }
+    }
+}
 
 fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
     let evaluation = match arg.as_deref() {
@@ -34,7 +57,7 @@ fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
 
     let mut input = String::new();
     loop {
-        input.push_str(arg.unwrap().as_str());
+        input.push_str(some_or_exit(arg, "missing expression").as_str());
         input.push_str(" ");
         arg = args.next();
         if arg.is_none() {
@@ -44,18 +67,12 @@ fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
 
     // Attempt to parse the input expression.
     let root = parse(input.as_str());
-
-    if let Err(err) = root {
-        eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {err}\x1B[39m");
-        exit(1);
-    }
-
-    let root = root.unwrap();
+    let root = ok_or_exit(root);
 
     // Echo the parsed expression.
     let mut stdout = stdout();
     let mut pp = PP::new(&mut stdout);
-    root.accept(&mut pp).unwrap();
+    ok_or_exit(root.accept(&mut pp));
     println!();
 
     // Attempt to evaluate the parsed expression.
@@ -83,7 +100,7 @@ fn graph(lang: Option<String>, args: &mut impl Iterator<Item = String>) {
     let mut input = String::new();
 
     loop {
-        input.push_str(arg.unwrap().as_str());
+        input.push_str(some_or_exit(arg, "missing expression").as_str());
         input.push_str(" ");
         arg = args.next();
         if arg.is_none() {
@@ -93,13 +110,7 @@ fn graph(lang: Option<String>, args: &mut impl Iterator<Item = String>) {
 
     // Attempt to parse the input expression.
     let root = parse(input.as_str());
-
-    if let Err(err) = root {
-        eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {err}\x1B[39m");
-        exit(1);
-    }
-
-    let root = root.unwrap();
+    let root = ok_or_exit(root);
 
     // Echo the parsed expression.
     let mut stdout = stdout();
@@ -109,7 +120,7 @@ fn graph(lang: Option<String>, args: &mut impl Iterator<Item = String>) {
         _ => unreachable!(),
     };
 
-    writer.write(root.as_ref()).unwrap();
+    ok_or_exit(writer.write(root.as_ref()));
 }
 
 fn main() {

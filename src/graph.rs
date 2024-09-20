@@ -1,7 +1,8 @@
 // Copyright 2024 Jonathon Cobb
 // Licensed under the ISC license
 
-//! This module outputs a Graphviz DOT file representing the AST of a dice expression.
+//! This module outputs a Graphviz DOT file representing the AST of a dice
+//! expression.
 
 use std::{
     io::{Error as IoError, Write},
@@ -11,6 +12,8 @@ use std::{
 use crate::ast::{
     Add, Div, Lit, Mul, Neg, Node, Roll, Select, Selection, Sub, Visitor, VisitorResult,
 };
+
+use crate::eval::Error;
 
 enum GraphLang {
     Dot,
@@ -105,17 +108,17 @@ impl<'o, W: Write> Visitor for GraphWriter<'o, W> {
     fn roll(&mut self, node: &Roll) -> VisitorResult {
         let id = self.write_node("Roll")?;
         node.count.accept(self)?;
-        let count_id = self.id_stack.pop().unwrap();
+        let count_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
 
         node.sides.accept(self)?;
-        let sides_id = self.id_stack.pop().unwrap();
+        let sides_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
 
         self.write_edge(&id, &count_id, "count")?;
         self.write_edge(&id, &sides_id, "sides")?;
 
         if let Some(selection) = &node.select {
             selection.accept(self)?;
-            let select_id = self.id_stack.pop().unwrap();
+            let select_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
             self.write_edge(&id, &select_id, "select")?;
         }
 
@@ -135,13 +138,13 @@ impl<'o, W: Write> Visitor for GraphWriter<'o, W> {
 
         if let Some(count) = &node.count {
             count.accept(self)?;
-            let count_id = self.id_stack.pop().unwrap();
+            let count_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
             self.write_edge(&id, &count_id, "count")?;
         }
 
         if let Some(next) = &node.next {
             next.accept(self)?;
-            let select_id = self.id_stack.pop().unwrap();
+            let select_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
             self.write_edge(&id, &select_id, "next")?;
         }
 
@@ -153,7 +156,7 @@ impl<'o, W: Write> Visitor for GraphWriter<'o, W> {
         let id = self.write_node("-")?;
 
         node.right.accept(self)?;
-        let right_id = self.id_stack.pop().unwrap();
+        let right_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
         self.write_edge(&id, &right_id, "right")?;
 
         self.id_stack.push(id);
@@ -164,10 +167,10 @@ impl<'o, W: Write> Visitor for GraphWriter<'o, W> {
         let id = self.write_node("Add")?;
 
         node.left.accept(self)?;
-        let left_id = self.id_stack.pop().unwrap();
+        let left_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
 
         node.right.accept(self)?;
-        let right_id = self.id_stack.pop().unwrap();
+        let right_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
 
         self.write_edge(&id, &left_id, "left")?;
         self.write_edge(&id, &right_id, "right")?;
@@ -180,10 +183,10 @@ impl<'o, W: Write> Visitor for GraphWriter<'o, W> {
         let id = self.write_node("Subtract")?;
 
         node.left.accept(self)?;
-        let left_id = self.id_stack.pop().unwrap();
+        let left_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
 
         node.right.accept(self)?;
-        let right_id = self.id_stack.pop().unwrap();
+        let right_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
 
         self.write_edge(&id, &left_id, "left")?;
         self.write_edge(&id, &right_id, "right")?;
@@ -196,10 +199,10 @@ impl<'o, W: Write> Visitor for GraphWriter<'o, W> {
         let id = self.write_node("Multiply")?;
 
         node.left.accept(self)?;
-        let left_id = self.id_stack.pop().unwrap();
+        let left_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
 
         node.right.accept(self)?;
-        let right_id = self.id_stack.pop().unwrap();
+        let right_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
 
         self.write_edge(&id, &left_id, "left")?;
         self.write_edge(&id, &right_id, "right")?;
@@ -212,10 +215,10 @@ impl<'o, W: Write> Visitor for GraphWriter<'o, W> {
         let id = self.write_node("Divide")?;
 
         node.left.accept(self)?;
-        let left_id = self.id_stack.pop().unwrap();
+        let left_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
 
         node.right.accept(self)?;
-        let right_id = self.id_stack.pop().unwrap();
+        let right_id = self.id_stack.pop().ok_or(Error::StackUnderflow)?;
 
         self.write_edge(&id, &left_id, "left")?;
         self.write_edge(&id, &right_id, "right")?;

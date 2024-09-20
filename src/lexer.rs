@@ -20,6 +20,7 @@
 use std::{
     error::Error as StdError,
     fmt::{Display, Formatter, Result as FmtResult},
+    num::ParseIntError,
     str::CharIndices,
 };
 
@@ -69,6 +70,7 @@ pub struct Lexer<'a> {
 pub enum Error {
     InvalidCharacter(char),
     InvalidWord(String),
+    ParseIntError(ParseIntError),
 }
 
 impl<'a> Lexer<'a> {
@@ -121,8 +123,11 @@ impl<'a> Iterator for Lexer<'a> {
             while self.next_char().map_or(false, |c| c.is_digit(10)) {}
 
             let j = self.peek_position();
-
-            return Some(Ok(Token::Integer(self.input[i..j].parse().unwrap())));
+            let n = match self.input[i..j].parse() {
+                Ok(n) => n,
+                Err(err) => return Some(Err(Error::ParseIntError(err))),
+            };
+            return Some(Ok(Token::Integer(n)));
         }
 
         if ch.is_alphabetic() {
@@ -181,6 +186,7 @@ impl Display for Error {
         match self {
             Error::InvalidCharacter(ch) => write!(f, "Invalid character '{}'", ch),
             Error::InvalidWord(word) => write!(f, "Invalid word '{}'", word),
+            Error::ParseIntError(err) => write!(f, "{}", err),
         }
     }
 }

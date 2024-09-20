@@ -4,13 +4,16 @@
 //! This module contains an evaluator for dice expressions that traverses an
 //! AST and returns the result of the expression.
 
-use std::{fmt::Display, ops::Range};
+use std::{
+    error::Error as StdError,
+    fmt::{Display, Formatter, Result as FmtResult},
+    ops::Range,
+};
 
 use rand::Rng;
 
 use crate::ast::{
-    Add, Div, Lit, Mul, Neg, Node, Roll, Select, Selection, Sub, Visitor,
-    VisitorResult,
+    Add, Div, Lit, Mul, Neg, Node, Roll, Select, Selection, Sub, Visitor, VisitorResult,
 };
 
 /// Possible ways to evaluate dice rolls.
@@ -150,7 +153,10 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
     }
 
     fn select(&mut self, node: &Select) -> VisitorResult {
-        let pool = self.dice_pools.last().unwrap().clone();
+        let pool = match self.dice_pools.last() {
+            Some(pool) => pool.clone(),
+            None => return Err(Box::new(Error::StackUnderflow)),
+        };
 
         match node.selection {
             Selection::KeepHighest
@@ -166,7 +172,7 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
                 let count = match &node.count {
                     Some(child) => {
                         child.accept(self)?;
-                        self.results.pop().unwrap() as usize
+                        self.results.pop().ok_or(Box::new(Error::StackUnderflow))? as usize
                     }
                     None => 1,
                 };
@@ -326,21 +332,36 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
 }
 
 impl Display for DieRoll {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         if self.keep {
-            write!(f, "\x1B[32m[d{}:\x1B[22m\x1B[1m{}\x1B[22m]\x1B[39m", self.sides, self.result)
+            write!(
+                f,
+                "\x1B[32m[d{}:\x1B[22m\x1B[1m{}\x1B[22m]\x1B[39m",
+                self.sides, self.result
+            )
         } else {
-            write!(f, "\x1B[9m\x1B[31m[d{}:\x1B[22m\x1B[1m{}\x1B[22m]\x1B[39m\x1B[29m", self.sides, self.result)
+            write!(
+                f,
+                "\x1B[9m\x1B[31m[d{}:\x1B[22m\x1B[1m{}\x1B[22m]\x1B[39m\x1B[29m",
+                self.sides, self.result
+            )
         }
     }
 }
 
-impl std::error::Error for Error {}
+impl StdError for Error {}
 
 impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Error::InvalidSelection{ selection_size, pool_size } => write!(f, "Cannot select {} dice from a pool of {}", selection_size, pool_size),
+            Error::InvalidSelection {
+                selection_size,
+                pool_size,
+            } => write!(
+                f,
+                "Cannot select {} dice from a pool of {}",
+                selection_size, pool_size
+            ),
             Error::DivideByZero => write!(f, "Division by zero"),
             Error::StackUnderflow => write!(f, "Stack underflow"),
         }
