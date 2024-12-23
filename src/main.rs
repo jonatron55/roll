@@ -72,7 +72,7 @@ fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
     // Echo the parsed expression.
     let mut stdout = stdout();
     let mut pp = PP::new(&mut stdout);
-    ok_or_exit(root.accept(&mut pp));
+    ok_or_exit(pp.write(&root));
     println!();
 
     // Attempt to evaluate the parsed expression.

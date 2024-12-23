@@ -24,6 +24,7 @@ use std::{
     str::CharIndices,
 };
 
+/// The set of valid words that can appear in a dice expression.
 const VALID_WORDS: &'static [&'static str] =
     &["d", "k", "kh", "kl", "dh", "dl", "adv", "dis", "da", "ad"];
 
@@ -67,8 +68,12 @@ pub struct Lexer<'a> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+/// Lexical errors that can occur during tokenization.
 pub enum Error {
+    /// An invalid character was encountered.
     InvalidCharacter(char),
+
+    /// An invalid word was encountered.
     InvalidWord(String),
     ParseIntError(ParseIntError),
 }

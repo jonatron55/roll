@@ -12,9 +12,7 @@ use std::{
 
 use rand::Rng;
 
-use crate::ast::{
-    Add, Div, Lit, Mul, Neg, Node, Roll, Select, Selection, Sub, Visitor, VisitorResult,
-};
+use crate::ast::{Node, Selection};
 
 /// Possible ways to evaluate dice rolls.
 pub enum Evaluation<TRng: Rng> {
@@ -92,29 +90,45 @@ impl<TRng: Rng> Evaluator<TRng> {
         }
     }
 
-    pub fn eval(&mut self, node: &dyn Node) -> Result<i32, Box<dyn std::error::Error>> {
+    pub fn eval(&mut self, node: &Node) -> Result<i32, Error> {
         self.rolls.clear();
-        node.accept(self)?;
-
-        self.results.pop().ok_or(Box::new(Error::StackUnderflow))
+        self.visit(node)?;
+        self.results.pop().ok_or(Error::StackUnderflow)
     }
-}
 
-impl<TRng: Rng> Visitor for Evaluator<TRng> {
-    fn lit(&mut self, node: &Lit) -> VisitorResult {
-        self.results.push(node.value);
+    fn visit(&mut self, node: &Node) -> Result<(), Error> {
+        match node {
+            Node::Lit { value } => self.lit(*value),
+            Node::Roll {
+                count,
+                sides,
+                select,
+            } => self.roll(&count, &sides, select.as_ref().map(|n| n.as_ref())),
+            Node::Select { selection, next } => {
+                self.select(selection, next.as_ref().map(|n| n.as_ref()))
+            }
+            Node::Neg { right } => self.neg(right.as_ref()),
+            Node::Add { left, right } => self.add(left.as_ref(), right.as_ref()),
+            Node::Sub { left, right } => self.sub(left.as_ref(), right.as_ref()),
+            Node::Mul { left, right } => self.mul(left.as_ref(), right.as_ref()),
+            Node::Div { left, right } => self.div(left.as_ref(), right.as_ref()),
+        }
+    }
+
+    fn lit(&mut self, value: i32) -> Result<(), Error> {
+        self.results.push(value);
         Ok(())
     }
 
-    fn roll(&mut self, node: &Roll) -> VisitorResult {
-        node.count.accept(self)?;
+    fn roll(&mut self, count: &Node, sides: &Node, select: Option<&Node>) -> Result<(), Error> {
+        self.visit(count)?;
         let Some(count) = self.results.pop() else {
-            return Err(Box::new(Error::StackUnderflow));
+            return Err(Error::StackUnderflow);
         };
 
-        node.sides.accept(self)?;
+        self.visit(sides)?;
         let Some(sides) = self.results.pop() else {
-            return Err(Box::new(Error::StackUnderflow));
+            return Err(Error::StackUnderflow);
         };
 
         for _ in 0..count {
@@ -133,9 +147,9 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
         }
 
         let pool = self.rolls.len() - count as usize..self.rolls.len();
-        if let Some(select) = &node.select {
+        if let Some(select) = &select {
             self.dice_pools.push(pool.clone());
-            select.accept(self)?;
+            self.visit(select)?;
             self.dice_pools.pop();
         }
 
@@ -152,36 +166,36 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
         Ok(())
     }
 
-    fn select(&mut self, node: &Select) -> VisitorResult {
+    fn select(&mut self, selection: &Selection, next: Option<&Node>) -> Result<(), Error> {
         let pool = match self.dice_pools.last() {
             Some(pool) => pool.clone(),
-            None => return Err(Box::new(Error::StackUnderflow)),
+            None => return Err(Error::StackUnderflow),
         };
 
-        match node.selection {
-            Selection::KeepHighest
-            | Selection::DropHighest
-            | Selection::KeepLowest
-            | Selection::DropLowest => {
+        match selection {
+            Selection::KeepHighest { count }
+            | Selection::DropHighest { count }
+            | Selection::KeepLowest { count }
+            | Selection::DropLowest { count } => {
                 // Sort the pool appropriately and select the dice to keep/drop
-                let high = node.selection == Selection::KeepHighest
-                    || node.selection == Selection::DropHighest;
-                let keep = node.selection == Selection::KeepHighest
-                    || node.selection == Selection::KeepLowest;
+                let high = matches!(selection, Selection::KeepHighest { .. })
+                    || matches!(selection, Selection::DropHighest { .. });
+                let keep = matches!(selection, Selection::KeepHighest { .. })
+                    || matches!(selection, Selection::KeepLowest { .. });
 
-                let count = match &node.count {
+                let count = match &count {
                     Some(child) => {
-                        child.accept(self)?;
-                        self.results.pop().ok_or(Box::new(Error::StackUnderflow))? as usize
+                        self.visit(child)?;
+                        self.results.pop().ok_or(Error::StackUnderflow)? as usize
                     }
                     None => 1,
                 };
 
                 if count > pool.len() {
-                    return Err(Box::new(Error::InvalidSelection {
+                    return Err(Error::InvalidSelection {
                         selection_size: count,
                         pool_size: pool.len(),
-                    }));
+                    });
                 }
 
                 if high {
@@ -200,7 +214,7 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
                     self.rolls[pool.start + i].keep = !keep;
                 }
 
-                if let Some(next) = &node.next {
+                if let Some(next) = &next {
                     let remaining = if keep {
                         pool.start..pool.start + count
                     } else {
@@ -208,7 +222,7 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
                     };
 
                     self.dice_pools.push(remaining);
-                    next.accept(self)?;
+                    self.visit(next)?;
                     self.dice_pools.pop();
                 }
 
@@ -238,7 +252,7 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
 
                 let total_old: i32 = self.rolls[old.clone()].iter().map(|r| r.result).sum();
                 let total_new: i32 = self.rolls[new.clone()].iter().map(|r| r.result).sum();
-                let kept = if (total_new > total_old) == (node.selection == Selection::Advantage) {
+                let kept = if (total_new > total_old) == matches!(selection, Selection::Advantage) {
                     for roll in old {
                         self.rolls[roll].keep = false
                     }
@@ -250,9 +264,9 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
                     old
                 };
 
-                if let Some(next) = &node.next {
+                if let Some(next) = &next {
                     self.dice_pools.push(kept);
-                    next.accept(self)?;
+                    self.visit(next)?;
                     self.dice_pools.pop();
                 }
 
@@ -261,69 +275,69 @@ impl<TRng: Rng> Visitor for Evaluator<TRng> {
         }
     }
 
-    fn neg(&mut self, node: &Neg) -> VisitorResult {
-        node.right.accept(self)?;
+    fn neg(&mut self, right: &Node) -> Result<(), Error> {
+        self.visit(right)?;
         let Some(right) = self.results.pop() else {
-            return Err(Box::new(Error::StackUnderflow));
+            return Err(Error::StackUnderflow);
         };
         self.results.push(-right);
         Ok(())
     }
 
-    fn add(&mut self, node: &Add) -> VisitorResult {
-        node.left.accept(self)?;
+    fn add(&mut self, left: &Node, right: &Node) -> Result<(), Error> {
+        self.visit(left)?;
         let Some(left) = self.results.pop() else {
-            return Err(Box::new(Error::StackUnderflow));
+            return Err(Error::StackUnderflow);
         };
-        node.right.accept(self)?;
+        self.visit(right)?;
         let Some(right) = self.results.pop() else {
-            return Err(Box::new(Error::StackUnderflow));
+            return Err(Error::StackUnderflow);
         };
 
         self.results.push(left + right);
         Ok(())
     }
 
-    fn sub(&mut self, node: &Sub) -> VisitorResult {
-        node.left.accept(self)?;
+    fn sub(&mut self, left: &Node, right: &Node) -> Result<(), Error> {
+        self.visit(left)?;
         let Some(left) = self.results.pop() else {
-            return Err(Box::new(Error::StackUnderflow));
+            return Err(Error::StackUnderflow);
         };
-        node.right.accept(self)?;
+        self.visit(right)?;
         let Some(right) = self.results.pop() else {
-            return Err(Box::new(Error::StackUnderflow));
+            return Err(Error::StackUnderflow);
         };
 
         self.results.push(left - right);
         Ok(())
     }
 
-    fn mul(&mut self, node: &Mul) -> VisitorResult {
-        node.left.accept(self)?;
+    fn mul(&mut self, left: &Node, right: &Node) -> Result<(), Error> {
+        self.visit(left)?;
         let Some(left) = self.results.pop() else {
-            return Err(Box::new(Error::StackUnderflow));
+            return Err(Error::StackUnderflow);
         };
-        node.right.accept(self)?;
+        self.visit(right)?;
         let Some(right) = self.results.pop() else {
-            return Err(Box::new(Error::StackUnderflow));
+            return Err(Error::StackUnderflow);
         };
 
         self.results.push(left * right);
         Ok(())
     }
 
-    fn div(&mut self, node: &Div) -> VisitorResult {
-        node.left.accept(self)?;
+    fn div(&mut self, left: &Node, right: &Node) -> Result<(), Error> {
+        self.visit(left)?;
         let Some(left) = self.results.pop() else {
-            return Err(Box::new(Error::StackUnderflow));
+            return Err(Error::StackUnderflow);
         };
-        node.right.accept(self)?;
+        self.visit(right)?;
         let Some(right) = self.results.pop() else {
-            return Err(Box::new(Error::StackUnderflow));
+            return Err(Error::StackUnderflow);
         };
 
         if right == 0 {
-            return Err(Box::new(Error::DivideByZero));
+            return Err(Error::DivideByZero);
         }
 
         self.results.push(left / right);

@@ -4,9 +4,9 @@
 //! A recursive descent parser for dice expressions. See `README.md` for a
 //! formal grammar of the language.
 
-use std::fmt::Display;
+use std::{error::Error as StdError, fmt::Display, fmt::Formatter, fmt::Result as FmtResult};
 
-use crate::ast::{Add, Div, Lit, Mul, Neg, Node, Roll, Select, Selection, Sub};
+use crate::ast::{Node, Selection};
 use crate::lexer::{Error as LexError, Lexer, Token};
 use crate::lookahead::Lookahead;
 
@@ -24,16 +24,16 @@ pub enum Error {
     /// A die with an invalid number of sides was encountered.
     InvalidDie(String),
 
-    /// A closing parenthesis was encountered that did not match an opening
-    /// parenthesis.
+    /// A closing `)` or `]` was encountered that did not match the opening `(`
+    /// or `[`.
     MismatchedParentheses(String),
 
     /// An error occurred in the lexer.
     LexError(LexError),
 }
 
-type Result = std::result::Result<Box<dyn Node>, Error>;
-type ResultOption = std::result::Result<Option<Box<dyn Node>>, Error>;
+type Result = std::result::Result<Box<Node>, Error>;
+type ResultOption = std::result::Result<Option<Box<Node>>, Error>;
 
 /// Parse a dice expression into an abstract syntax tree.
 pub fn parse<'a>(input: &'a str) -> Result {
@@ -70,12 +70,12 @@ fn parse_sum(lexer: &mut LookaheadLexer) -> Result {
             Some(Ok(Token::Plus)) => {
                 lexer.next();
                 let right = parse_term(lexer)?;
-                left = Box::new(Add { left, right });
+                left = Box::new(Node::Add { left, right });
             }
             Some(Ok(Token::Minus)) => {
                 lexer.next();
                 let right = parse_term(lexer)?;
-                left = Box::new(Sub { left, right });
+                left = Box::new(Node::Sub { left, right });
             }
             Some(Err(err)) => return Err(err.into()),
             _ => break,
@@ -84,6 +84,7 @@ fn parse_sum(lexer: &mut LookaheadLexer) -> Result {
 
     Ok(left)
 }
+
 /// Parse the production rule:
 /// ```ebnf
 /// term = factor, { ("*" | "/"), factor };
@@ -96,12 +97,12 @@ fn parse_term(lexer: &mut LookaheadLexer) -> Result {
             Some(Ok(Token::Times)) => {
                 lexer.next();
                 let right = parse_factor(lexer)?;
-                left = Box::new(Mul { left, right });
+                left = Box::new(Node::Mul { left, right });
             }
             Some(Ok(Token::Divide)) => {
                 lexer.next();
                 let right = parse_factor(lexer)?;
-                left = Box::new(Div { left, right });
+                left = Box::new(Node::Div { left, right });
             }
             Some(Err(err)) => return Err(err.into()),
             _ => break,
@@ -154,7 +155,7 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
 
             match &token {
                 Some(Ok(Token::Word("d"))) => parse_roll(lexer, n),
-                _ => Ok(Box::new(Lit { value: n })),
+                _ => Ok(Box::new(Node::Lit { value: n })),
             }
         }
 
@@ -163,7 +164,7 @@ fn parse_factor(lexer: &mut LookaheadLexer) -> Result {
         Some(Ok(Token::Minus)) => {
             lexer.next();
             let right = parse_factor(lexer)?;
-            Ok(Box::new(Neg { right }))
+            Ok(Box::new(Node::Neg { right }))
         }
 
         Some(Err(err)) => return Err(err.into()),
@@ -191,9 +192,9 @@ fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
                     4 | 6 | 8 | 10 | 12 | 20 | 100 => {
                         lexer.next();
                         let select = parse_selection(lexer)?;
-                        Ok(Box::new(Roll {
-                            count: Box::new(Lit { value: count }),
-                            sides: Box::new(Lit { value: sides }),
+                        Ok(Box::new(Node::Roll {
+                            count: Box::new(Node::Lit { value: count }),
+                            sides: Box::new(Node::Lit { value: sides }),
                             select,
                         }))
                     }
@@ -202,9 +203,9 @@ fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
                 Some(Ok(Token::Percent)) => {
                     lexer.next();
                     let select = parse_selection(lexer)?;
-                    Ok(Box::new(Roll {
-                        count: Box::new(Lit { value: count }),
-                        sides: Box::new(Lit { value: 100 }),
+                    Ok(Box::new(Node::Roll {
+                        count: Box::new(Node::Lit { value: count }),
+                        sides: Box::new(Node::Lit { value: 100 }),
                         select,
                     }))
                 }
@@ -213,9 +214,9 @@ fn parse_roll(lexer: &mut LookaheadLexer, count: i32) -> Result {
 
                 _ => {
                     let select = parse_selection(lexer)?;
-                    Ok(Box::new(Roll {
-                        count: Box::new(Lit { value: count }),
-                        sides: Box::new(Lit { value: 6 }),
+                    Ok(Box::new(Node::Roll {
+                        count: Box::new(Node::Lit { value: count }),
+                        sides: Box::new(Node::Lit { value: 6 }),
                         select,
                     }))
                 }
@@ -254,51 +255,55 @@ fn parse_selection(lexer: &mut LookaheadLexer) -> ResultOption {
         | Some(Ok(Token::Word("d")))
         | Some(Ok(Token::Word("dh")))
         | Some(Ok(Token::Word("dl"))) => {
-            let selection = match token {
-                Some(Ok(Token::Word("k"))) => Selection::KeepHighest,
-                Some(Ok(Token::Word("kh"))) => Selection::KeepHighest,
-                Some(Ok(Token::Word("kl"))) => Selection::KeepLowest,
-                Some(Ok(Token::Word("d"))) => Selection::DropLowest,
-                Some(Ok(Token::Word("dh"))) => Selection::DropHighest,
-                Some(Ok(Token::Word("dl"))) => Selection::DropLowest,
-                _ => unreachable!(),
-            };
-
+            let selection = *token.unwrap().as_ref().unwrap();
             let token = lexer.next();
-            match token {
+            let (count, next) = match token {
                 Some(Ok(Token::Integer(n))) => {
                     lexer.next();
-                    Ok(Some(Box::new(Select {
-                        selection,
-                        count: Some(Box::new(Lit { value: n })),
-                        next: parse_selection(lexer)?,
-                    })))
+                    (
+                        Some(Box::new(Node::Lit { value: n })),
+                        parse_selection(lexer)?,
+                    )
                 }
 
                 Some(Err(err)) => return Err(err.into()),
 
-                _ => Ok(Some(Box::new(Select {
-                    selection,
-                    count: None,
-                    next: parse_selection(lexer)?,
+                _ => (None, parse_selection(lexer)?),
+            };
+
+            match selection {
+                Token::Word("k") | Token::Word("kh") => Ok(Some(Box::new(Node::Select {
+                    selection: Selection::KeepHighest { count },
+                    next,
                 }))),
+                Token::Word("kl") => Ok(Some(Box::new(Node::Select {
+                    selection: Selection::KeepLowest { count },
+                    next,
+                }))),
+                Token::Word("d") | Token::Word("dl") => Ok(Some(Box::new(Node::Select {
+                    selection: Selection::DropLowest { count },
+                    next,
+                }))),
+                Token::Word("dh") => Ok(Some(Box::new(Node::Select {
+                    selection: Selection::DropHighest { count },
+                    next,
+                }))),
+                _ => unreachable!(),
             }
         }
 
         Some(Ok(Token::Word("adv"))) | Some(Ok(Token::Word("ad"))) => {
             lexer.next();
-            Ok(Some(Box::new(Select {
+            Ok(Some(Box::new(Node::Select {
                 selection: Selection::Advantage,
-                count: None,
                 next: parse_selection(lexer)?,
             })))
         }
 
         Some(Ok(Token::Word("dis"))) | Some(Ok(Token::Word("da"))) => {
             lexer.next();
-            Ok(Some(Box::new(Select {
+            Ok(Some(Box::new(Node::Select {
                 selection: Selection::Disadvantage,
-                count: None,
                 next: parse_selection(lexer)?,
             })))
         }
@@ -309,8 +314,8 @@ fn parse_selection(lexer: &mut LookaheadLexer) -> ResultOption {
     }
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl StdError for Error {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             Error::LexError(error) => Some(error),
             _ => None,
@@ -319,7 +324,7 @@ impl std::error::Error for Error {
 }
 
 impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             Error::UnexpectedToken(message) => write!(f, "{message}",),
             Error::UnexpectedEnd(message) => write!(f, "{message}"),
