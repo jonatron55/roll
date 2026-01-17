@@ -9,10 +9,12 @@ mod lookahead;
 mod parser;
 mod pp;
 
+#[cfg(test)]
+mod tests;
+
 use std::{env, fmt::Display, io::stdout, process::exit};
 
 use parser::parse;
-use pp::PP;
 
 fn ok_or_exit<T, E>(result: Result<T, E>) -> T
 where
@@ -70,10 +72,7 @@ fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
     let root = ok_or_exit(root);
 
     // Echo the parsed expression.
-    let mut stdout = stdout();
-    let mut pp = PP::new(&mut stdout);
-    ok_or_exit(pp.write(&root));
-    println!();
+    println!("{root}");
 
     // Attempt to evaluate the parsed expression.
     let mut evaluator = eval::Evaluator::new(evaluation);
@@ -82,7 +81,7 @@ fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
     match result {
         Ok(result) => {
             for roll in evaluator.rolls {
-                print!("{} ", roll);
+                print!("{roll} ");
             }
 
             println!();

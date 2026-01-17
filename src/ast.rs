@@ -5,8 +5,12 @@
 //!
 //! This module defines the nodes that make up the AST for dice expressions.
 
+use std::fmt::{Display, Formatter, Result as FmtResult};
+
+use crate::pp::PP;
+
 /// Selections that can be made over dice rolls.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Selection {
     /// Keep the lowest *n* dice.
     KeepLowest { count: Option<Box<Node>> },
@@ -28,7 +32,7 @@ pub enum Selection {
 }
 
 /// A node in the syntax tree.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Node {
     /// Node that represents a literal integer value.
     Lit { value: i32 },
@@ -60,4 +64,11 @@ pub enum Node {
 
     /// A node that represents the division operation.
     Div { left: Box<Node>, right: Box<Node> },
+}
+
+impl Display for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        let mut pp = PP::new(f);
+        pp.write(self)
+    }
 }

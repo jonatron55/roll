@@ -13,7 +13,7 @@ use crate::lookahead::Lookahead;
 type LookaheadLexer<'a> = Lookahead<Lexer<'a>>;
 
 /// Parsing errors.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     /// A token was encountered at an unexpected position.
     UnexpectedToken(String),

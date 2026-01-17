@@ -75,6 +75,8 @@ pub enum Error {
 
     /// An invalid word was encountered.
     InvalidWord(String),
+
+    /// An error occurred while parsing an integer (for example, overflow).
     ParseIntError(ParseIntError),
 }
 

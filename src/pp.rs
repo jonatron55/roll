@@ -4,7 +4,7 @@
 //! This module contains a pretty-printer for the dice expressions that
 //! traverses an AST and outputs a string representation of the expression.
 
-use std::io::{Error as IoError, Write};
+use std::fmt::{Error as FmtError, Write};
 
 use crate::ast::{Node, Selection};
 
@@ -26,11 +26,11 @@ impl<'o, W: Write> PP<'o, W> {
         }
     }
 
-    pub fn write(&mut self, node: &Node) -> Result<(), IoError> {
+    pub fn write(&mut self, node: &Node) -> Result<(), FmtError> {
         self.visit(node)
     }
 
-    fn visit(&mut self, node: &Node) -> Result<(), IoError> {
+    fn visit(&mut self, node: &Node) -> Result<(), FmtError> {
         match node {
             Node::Lit { value } => self.lit(*value),
             Node::Roll {
@@ -49,12 +49,12 @@ impl<'o, W: Write> PP<'o, W> {
         }
     }
 
-    fn lit(&mut self, value: i32) -> Result<(), IoError> {
+    fn lit(&mut self, value: i32) -> Result<(), FmtError> {
         write!(self.writer, "{}", value)?;
         Ok(())
     }
 
-    fn roll(&mut self, count: &Node, sides: &Node, select: Option<&Node>) -> Result<(), IoError> {
+    fn roll(&mut self, count: &Node, sides: &Node, select: Option<&Node>) -> Result<(), FmtError> {
         self.visit(count)?;
         write!(self.writer, "d")?;
         self.visit(sides)?;
@@ -66,7 +66,7 @@ impl<'o, W: Write> PP<'o, W> {
         Ok(())
     }
 
-    fn select(&mut self, selection: &Selection, next: Option<&Node>) -> Result<(), IoError> {
+    fn select(&mut self, selection: &Selection, next: Option<&Node>) -> Result<(), FmtError> {
         match selection {
             Selection::KeepHighest { .. } => write!(self.writer, "kh")?,
             Selection::KeepLowest { .. } => write!(self.writer, "kl")?,
@@ -97,7 +97,7 @@ impl<'o, W: Write> PP<'o, W> {
         Ok(())
     }
 
-    fn neg(&mut self, right: &Node) -> Result<(), IoError> {
+    fn neg(&mut self, right: &Node) -> Result<(), FmtError> {
         let was_prod = self.prod;
         self.prod = true;
         write!(self.writer, "-")?;
@@ -106,7 +106,7 @@ impl<'o, W: Write> PP<'o, W> {
         Ok(())
     }
 
-    fn add(&mut self, left: &Node, right: &Node) -> Result<(), IoError> {
+    fn add(&mut self, left: &Node, right: &Node) -> Result<(), FmtError> {
         let was_prod = self.prod;
         self.prod = false;
 
@@ -126,7 +126,7 @@ impl<'o, W: Write> PP<'o, W> {
         Ok(())
     }
 
-    fn sub(&mut self, left: &Node, right: &Node) -> Result<(), IoError> {
+    fn sub(&mut self, left: &Node, right: &Node) -> Result<(), FmtError> {
         let was_prod = self.prod;
         self.prod = false;
 
@@ -146,7 +146,7 @@ impl<'o, W: Write> PP<'o, W> {
         Ok(())
     }
 
-    fn mul(&mut self, left: &Node, right: &Node) -> Result<(), IoError> {
+    fn mul(&mut self, left: &Node, right: &Node) -> Result<(), FmtError> {
         let was_prod = self.prod;
         self.prod = true;
 
@@ -158,7 +158,7 @@ impl<'o, W: Write> PP<'o, W> {
         Ok(())
     }
 
-    fn div(&mut self, left: &Node, right: &Node) -> Result<(), IoError> {
+    fn div(&mut self, left: &Node, right: &Node) -> Result<(), FmtError> {
         let was_prod = self.prod;
         self.prod = true;
 
