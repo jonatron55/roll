@@ -30,7 +30,7 @@ fn test_rolls() {
         evaluator.rolls,
         vec![DieRoll {
             sides: 20,
-            result: 10,
+            result: 10.0,
             keep: true
         }]
     );
@@ -42,17 +42,17 @@ fn test_rolls() {
         vec![
             DieRoll {
                 sides: 6,
-                result: 6,
+                result: 6.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 4,
+                result: 4.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 2,
+                result: 2.0,
                 keep: true
             }
         ]
@@ -65,12 +65,12 @@ fn test_rolls() {
         vec![
             DieRoll {
                 sides: 20,
-                result: 12,
+                result: 12.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 6,
+                result: 6.0,
                 keep: true
             },
         ]
@@ -87,12 +87,12 @@ fn test_selection() {
         vec![
             DieRoll {
                 sides: 20,
-                result: 15,
+                result: 15.0,
                 keep: true
             },
             DieRoll {
                 sides: 20,
-                result: 5,
+                result: 5.0,
                 keep: false
             },
         ]
@@ -106,12 +106,12 @@ fn test_selection() {
         vec![
             DieRoll {
                 sides: 20,
-                result: 15,
+                result: 15.0,
                 keep: false
             },
             DieRoll {
                 sides: 20,
-                result: 5,
+                result: 5.0,
                 keep: true
             },
         ]
@@ -125,22 +125,22 @@ fn test_selection() {
         vec![
             DieRoll {
                 sides: 6,
-                result: 6,
+                result: 6.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 5,
+                result: 5.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 3,
+                result: 3.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 2,
+                result: 2.0,
                 keep: false
             },
         ]
@@ -154,22 +154,22 @@ fn test_selection() {
         vec![
             DieRoll {
                 sides: 6,
-                result: 6,
+                result: 6.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 5,
+                result: 5.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 3,
+                result: 3.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 2,
+                result: 2.0,
                 keep: false
             },
         ]
@@ -183,22 +183,22 @@ fn test_selection() {
         vec![
             DieRoll {
                 sides: 6,
-                result: 6,
+                result: 6.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 5,
+                result: 5.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 3,
+                result: 3.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 2,
+                result: 2.0,
                 keep: true
             },
         ]
@@ -212,22 +212,22 @@ fn test_selection() {
         vec![
             DieRoll {
                 sides: 6,
-                result: 6,
+                result: 6.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 5,
+                result: 5.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 3,
+                result: 3.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 2,
+                result: 2.0,
                 keep: true
             },
         ]
@@ -244,22 +244,22 @@ fn test_chained_selection() {
         vec![
             DieRoll {
                 sides: 6,
-                result: 6,
+                result: 6.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 4,
+                result: 4.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 2,
+                result: 2.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 1,
+                result: 1.0,
                 keep: false
             },
         ]
@@ -273,37 +273,37 @@ fn test_chained_selection() {
         vec![
             DieRoll {
                 sides: 6,
-                result: 6,
+                result: 6.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 5,
+                result: 5.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 3,
+                result: 3.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 2,
+                result: 2.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 1,
+                result: 1.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 1,
+                result: 1.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 1,
+                result: 1.0,
                 keep: false
             },
         ]
@@ -317,37 +317,37 @@ fn test_chained_selection() {
         vec![
             DieRoll {
                 sides: 6,
-                result: 6,
+                result: 6.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 5,
+                result: 5.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 3,
+                result: 3.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 2,
+                result: 2.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 4,
+                result: 4.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 4,
+                result: 4.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 4,
+                result: 4.0,
                 keep: true
             },
         ]
@@ -361,37 +361,37 @@ fn test_chained_selection() {
         vec![
             DieRoll {
                 sides: 6,
-                result: 4,
+                result: 4.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 3,
+                result: 3.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 2,
+                result: 2.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 1,
+                result: 1.0,
                 keep: false
             },
             DieRoll {
                 sides: 6,
-                result: 6,
+                result: 6.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 5,
+                result: 5.0,
                 keep: true
             },
             DieRoll {
                 sides: 6,
-                result: 5,
+                result: 5.0,
                 keep: true
             },
         ]

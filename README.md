@@ -2,14 +2,14 @@ Dice Roller
 ===========
 
 This is a simple Rust program to parse and evaluate dice expressions using
-typical notation such as `3d8 + 2`. The normal arithmetic  operations `+`, `-`,
+typical notation such as `3d8 + 2`. The normal arithmetic operations `+`, `-`,
 `*`, and `/` are supported with `×` and `÷` recognized as alternate forms of `*`
-and `/`. Products precede sums unless grouped be parentheses. Dice rolls are
+and `/`. Products precede sums unless grouped by parentheses. Dice rolls are
 expressed as *count*`d`*sides* where *sides* is 4, 6, 8, 10, 12, 20, or 100 (the
 sequence `d%` is interpreted as `d100`). If the die count is omitted (e.g.
-`d20 + 5`), it is assumed to be 1 and if the number of sides are omitted (e.g.
+`d20 + 5`), it is assumed to be 1, and if the number of sides is omitted (e.g.
 `4d + 1`), then the dice are assumed to be six-sided. A roll may be followed by
-any number of selection modifiers, too keep or discard certain dice:
+any number of selection modifiers, to keep or discard certain dice:
 
 - `k<n>` or `kh<n>`: keep the highest `<n>` dice. If `<n>` is omitted, it is
   assumed to be 1.
@@ -30,9 +30,11 @@ selections and they will be evaluated in order from left to right. `adv` and
 they have the effect of rerolling the entire previous sub-expression (including
 any previous selections) and taking the higher or lower total respectively.
 
-Only integers are supported, and the result of an expression is always an
-integer. When division is performed, the result is rounded down to the nearest
-integer before the next operation is performed.
+Only integers are supported as input, and the result of an expression is always
+an integer. However, intermediate values may be non-integer, for example when
+using the `mid` option or as the result of division. The final result is always
+rounded *down* to the nearest integer (positive numbers towards zero and
+negative numbers away from zero).
 
 Usage
 -----
@@ -45,7 +47,7 @@ roll [min|mid|max|dot|mermaid] <expr>
 ```
 
 Where `<expr>` matches the grammar below. If `min`, `mid`, or `max` are
-specified, then instead of using random numbers, the minimum, middle, or maximum
+specified, then instead of using random numbers, the minimum, median, or maximum
 value for each die roll is used. For example:
 
 ```text
@@ -59,11 +61,22 @@ total = 10
 [d6: 1] [d6: 1] [d6: 1]
 total = 5
 
+>roll mid 3d6 + 2
+3d6 + 2
+[d6: 3.5] [d6: 3.5] [d6: 3.5]
+total = 12
+
 >roll max 3d6 + 2
 3d6 + 2
 [d6: 6] [d6: 6] [d6: 6]
 total = 20
 ```
+
+Note that the `mid` option uses the median value for each die, which is not
+necessarily the same as the median of the total distribution of the expression.
+The median value for a die with an even number of sides will always be a
+fraction ending in 0.5, despite this not being a possible roll for that die. The
+final result will still be rounded down to the nearest integer.
 
 If `dot` is specified, then the expression's syntax tree is printed in
 [Graphviz DOT](https://graphviz.org/) format. This output can be piped directly
@@ -105,7 +118,7 @@ Dice expressions are parsed according to the following grammar:
 ```ebnf
 root = sum;
 sum = term, { ("+" | "-"), term };
-term = factor, { ("*" | "/"), factor };
+term = factor, { ("*" | "×" | "/" | "÷"), factor };
 factor = "(", sum, ")" | negation | integer | roll;
 negation = "-", factor;
 roll = [integer], "d", [integer], [selection];
@@ -119,5 +132,6 @@ selection = (
         "adv" | "ad" |
         "dis" | "da"
     ), [selection];
-integer = /[0-9]+/;
+integer = digit, {digit};
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 ```

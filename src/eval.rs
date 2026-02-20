@@ -5,6 +5,7 @@
 //! AST and returns the result of the expression.
 
 use std::{
+    cmp::Ordering,
     error::Error as StdError,
     fmt::{Display, Formatter, Result as FmtResult},
     ops::Range,
@@ -22,8 +23,8 @@ pub enum Evaluation<TRng: Rng> {
     /// Evaluate the expression as if all dice rolls were 1.
     Min,
 
-    /// Evaluate the expression as if all dice rolls landed in the middle of
-    /// their range (rounded down).
+    /// Evaluate the expression as if all dice rolls landed on the median of
+    /// their range (which will be fractional for even-sided dice).
     Mid,
 
     /// Evaluate the expression as if all dice rolls were the highest possible.
@@ -42,15 +43,14 @@ pub struct DieRoll {
     pub sides: i32,
 
     /// The result of the roll.
-    pub result: i32,
+    pub result: f64,
 
     /// Whether the roll was kept or discarded during a selection operation.
     pub keep: bool,
 }
 
-/// An implementation of the `Visitor` trait that evaluates each node in the AST
-/// using a stack and returns the result of the expression along with the
-/// individual die rolls.
+/// Evaluates each node in the AST using a stack and returns the result of the
+/// expression along with the individual die rolls.
 pub struct Evaluator<TRng: Rng> {
     /// The rolls made during the evaluation.
     pub rolls: Vec<DieRoll>,
@@ -61,7 +61,7 @@ pub struct Evaluator<TRng: Rng> {
     /// A stack of intermediate results. Once the traversal is complete, the
     /// stack should contain a single value representing the result of the
     /// expression.
-    results: Vec<i32>,
+    results: Vec<f64>,
 
     /// A stack of dice pools that are being selected from. Pools are ranges
     /// over the `rolls` vector and are pushed when a new roll is made and
@@ -99,7 +99,10 @@ impl<TRng: Rng> Evaluator<TRng> {
     pub fn eval(&mut self, node: &Node) -> Result<i32, Error> {
         self.rolls.clear();
         self.visit(node)?;
-        self.results.pop().ok_or(Error::StackUnderflow)
+        self.results
+            .pop()
+            .ok_or(Error::StackUnderflow)
+            .map(|x| x.floor() as i32)
     }
 
     fn visit(&mut self, node: &Node) -> Result<(), Error> {
@@ -122,7 +125,7 @@ impl<TRng: Rng> Evaluator<TRng> {
     }
 
     fn lit(&mut self, value: i32) -> Result<(), Error> {
-        self.results.push(value);
+        self.results.push(value as f64);
         Ok(())
     }
 
@@ -131,22 +134,24 @@ impl<TRng: Rng> Evaluator<TRng> {
         let Some(count) = self.results.pop() else {
             return Err(Error::StackUnderflow);
         };
+        let count = count as usize;
 
         self.visit(sides)?;
         let Some(sides) = self.results.pop() else {
             return Err(Error::StackUnderflow);
         };
+        let sides = sides as i32;
 
         let roll_start = self.rolls.len();
 
         for _ in 0..count {
             let roll = match &mut self.evaluation {
-                Evaluation::Rand(rng) => rng.random_range(1..sides + 1),
-                Evaluation::Min => 1,
-                Evaluation::Mid => sides / 2,
-                Evaluation::Max => sides,
+                Evaluation::Rand(rng) => rng.random_range(1..sides + 1) as f64,
+                Evaluation::Min => 1.0,
+                Evaluation::Mid => sides as f64 * 0.5 + 0.5,
+                Evaluation::Max => sides as f64,
                 #[cfg(test)]
-                Evaluation::Mocked(rolls) => rolls.remove(0),
+                Evaluation::Mocked(rolls) => rolls.remove(0) as f64,
             };
 
             self.rolls.push(DieRoll {
@@ -163,11 +168,12 @@ impl<TRng: Rng> Evaluator<TRng> {
             self.dice_pools.pop();
         }
 
-        self.rolls[pool.start..pool.end].sort_unstable_by(|a, b| b.result.cmp(&a.result));
+        self.rolls[pool.start..pool.end]
+            .sort_unstable_by(|a, b| b.result.partial_cmp(&a.result).unwrap_or(Ordering::Equal));
 
         let total = self.rolls[roll_start..self.rolls.len()]
             .iter()
-            .map(|r| if r.keep { r.result } else { 0 })
+            .map(|r| if r.keep { r.result } else { 0.0 })
             .sum();
 
         self.results.push(total);
@@ -208,11 +214,13 @@ impl<TRng: Rng> Evaluator<TRng> {
                 }
 
                 if high {
-                    self.rolls[pool.start..pool.end]
-                        .sort_unstable_by(|a, b| b.result.cmp(&a.result));
+                    self.rolls[pool.start..pool.end].sort_unstable_by(|a, b| {
+                        b.result.partial_cmp(&a.result).unwrap_or(Ordering::Equal)
+                    });
                 } else {
-                    self.rolls[pool.start..pool.end]
-                        .sort_unstable_by(|a, b| a.result.cmp(&b.result));
+                    self.rolls[pool.start..pool.end].sort_unstable_by(|a, b| {
+                        a.result.partial_cmp(&b.result).unwrap_or(Ordering::Equal)
+                    });
                 }
 
                 for i in 0..count {
@@ -243,12 +251,12 @@ impl<TRng: Rng> Evaluator<TRng> {
                 for i in pool.clone() {
                     let sides = self.rolls[i].sides;
                     let roll = match &mut self.evaluation {
-                        Evaluation::Rand(rng) => rng.random_range(1..sides + 1),
-                        Evaluation::Min => 1,
-                        Evaluation::Mid => sides / 2,
-                        Evaluation::Max => sides,
+                        Evaluation::Rand(rng) => rng.random_range(1..sides + 1) as f64,
+                        Evaluation::Min => 1.0,
+                        Evaluation::Mid => sides as f64 * 0.5 + 0.5,
+                        Evaluation::Max => sides as f64,
                         #[cfg(test)]
-                        Evaluation::Mocked(rolls) => rolls.remove(0),
+                        Evaluation::Mocked(rolls) => rolls.remove(0) as f64,
                     };
 
                     self.rolls.push(DieRoll {
@@ -261,8 +269,8 @@ impl<TRng: Rng> Evaluator<TRng> {
                 let old = pool.start..pool.end;
                 let new = self.rolls.len() - pool.len()..self.rolls.len();
 
-                let total_old: i32 = self.rolls[old.clone()].iter().map(|r| r.result).sum();
-                let total_new: i32 = self.rolls[new.clone()].iter().map(|r| r.result).sum();
+                let total_old: f64 = self.rolls[old.clone()].iter().map(|r| r.result).sum();
+                let total_new: f64 = self.rolls[new.clone()].iter().map(|r| r.result).sum();
                 let kept = if (total_new > total_old) == matches!(selection, Selection::Advantage) {
                     for roll in old {
                         self.rolls[roll].keep = false
@@ -347,7 +355,7 @@ impl<TRng: Rng> Evaluator<TRng> {
             return Err(Error::StackUnderflow);
         };
 
-        if right == 0 {
+        if right.abs() < f64::EPSILON {
             return Err(Error::DivideByZero);
         }
 

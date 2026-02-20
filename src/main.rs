@@ -4,6 +4,7 @@
 mod ast;
 mod eval;
 mod graph;
+mod help;
 mod lexer;
 mod lookahead;
 mod parser;
@@ -17,7 +18,7 @@ use std::{env, fmt::Display, io::stdout, process::exit};
 use anstream::{eprintln, print, println};
 use anstyle::{AnsiColor, Color, Style};
 
-use crate::{eval::DieRoll, parser::parse};
+use crate::{eval::DieRoll, help::print_help, parser::parse};
 
 const ERROR: Style = Style::new()
     .fg_color(Some(Color::Ansi(AnsiColor::Red)))
@@ -73,6 +74,11 @@ fn some_or_exit<T>(option: Option<T>, msg: &str) -> T {
 
 fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
     let evaluation = match arg.as_deref() {
+        Some("help") | Some("-help") | Some("--help") | Some("/help") | Some("-h") | Some("/h")
+        | Some("-?") | Some("/?") | Some("?") | None => {
+            print_help();
+            exit(0);
+        }
         Some("min") => {
             arg = args.next();
             eval::Evaluation::Min
@@ -86,7 +92,6 @@ fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
             eval::Evaluation::Max
         }
         Some(_) => eval::Evaluation::Rand(rand::rng()),
-        None => exit(0),
     };
 
     let mut input = String::new();
@@ -170,9 +175,9 @@ fn print_roll(roll: &DieRoll) {
 
 fn main() {
     // The expression to evaluate is given on the command line and may be
-    // preceded  by 'min', 'mid', or 'max' to specify the evaluation strategy.
-    // The remaining arguments (or all arguments if no strategy is given) are
-    // concatenated to form a single expression.
+    // preceded by 'min', 'mid', or 'max' to specify the evaluation strategy,
+    // or by 'dot' or 'mermaid' to output the syntax tree as a graph. The
+    // remaining arguments are concatenated to form a single expression.
     let mut args = env::args().map(|arg| arg.to_lowercase());
     args.next();
     let arg = args.next();
