@@ -3,7 +3,7 @@
 
 //! Components for writing the AST to a visual graph. The graph can be written
 //! in either [Graphviz DOT language](https://graphviz.org/) or
-//!  [Mermaid language](https://mermaid.js.org/).
+//! [Mermaid language](https://mermaid.js.org/).
 
 use std::{
     error::Error as StdError,

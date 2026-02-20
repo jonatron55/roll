@@ -10,7 +10,7 @@ use std::{
     ops::Range,
 };
 
-use rand::Rng;
+use rand::{Rng, RngExt};
 
 use crate::ast::{Node, Selection};
 
@@ -28,9 +28,15 @@ pub enum Evaluation<TRng: Rng> {
 
     /// Evaluate the expression as if all dice rolls were the highest possible.
     Max,
+
+    /// Evaluate the expression using fixed die rolls. Panics if there are not
+    /// enough rolls provided.
+    #[cfg(test)]
+    Mocked(Vec<i32>),
 }
 
 /// A single die roll.
+#[derive(Debug, PartialEq)]
 pub struct DieRoll {
     /// The number of sides on the die. May be 4, 6, 8, 10, 12, 20, or 100.
     pub sides: i32,
@@ -64,7 +70,7 @@ pub struct Evaluator<TRng: Rng> {
 }
 
 /// Possible errors that can occur during evaluation.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     /// A selection operation (`kh`, `dl`, etc.) involves selecting more dice
     /// than are available after rolling and applying previous selections.
@@ -131,12 +137,16 @@ impl<TRng: Rng> Evaluator<TRng> {
             return Err(Error::StackUnderflow);
         };
 
+        let roll_start = self.rolls.len();
+
         for _ in 0..count {
             let roll = match &mut self.evaluation {
-                Evaluation::Rand(rng) => rng.gen_range(1..sides + 1),
+                Evaluation::Rand(rng) => rng.random_range(1..sides + 1),
                 Evaluation::Min => 1,
                 Evaluation::Mid => sides / 2,
                 Evaluation::Max => sides,
+                #[cfg(test)]
+                Evaluation::Mocked(rolls) => rolls.remove(0),
             };
 
             self.rolls.push(DieRoll {
@@ -146,7 +156,7 @@ impl<TRng: Rng> Evaluator<TRng> {
             });
         }
 
-        let pool = self.rolls.len() - count as usize..self.rolls.len();
+        let pool = roll_start..self.rolls.len();
         if let Some(select) = &select {
             self.dice_pools.push(pool.clone());
             self.visit(select)?;
@@ -155,8 +165,7 @@ impl<TRng: Rng> Evaluator<TRng> {
 
         self.rolls[pool.start..pool.end].sort_unstable_by(|a, b| b.result.cmp(&a.result));
 
-        let total = self
-            .rolls
+        let total = self.rolls[roll_start..self.rolls.len()]
             .iter()
             .map(|r| if r.keep { r.result } else { 0 })
             .sum();
@@ -234,10 +243,12 @@ impl<TRng: Rng> Evaluator<TRng> {
                 for i in pool.clone() {
                     let sides = self.rolls[i].sides;
                     let roll = match &mut self.evaluation {
-                        Evaluation::Rand(rng) => rng.gen_range(1..sides + 1),
+                        Evaluation::Rand(rng) => rng.random_range(1..sides + 1),
                         Evaluation::Min => 1,
                         Evaluation::Mid => sides / 2,
                         Evaluation::Max => sides,
+                        #[cfg(test)]
+                        Evaluation::Mocked(rolls) => rolls.remove(0),
                     };
 
                     self.rolls.push(DieRoll {
@@ -342,24 +353,6 @@ impl<TRng: Rng> Evaluator<TRng> {
 
         self.results.push(left / right);
         Ok(())
-    }
-}
-
-impl Display for DieRoll {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        if self.keep {
-            write!(
-                f,
-                "\x1B[32m[d{}:\x1B[22m\x1B[1m{}\x1B[22m]\x1B[39m",
-                self.sides, self.result
-            )
-        } else {
-            write!(
-                f,
-                "\x1B[9m\x1B[31m[d{}:\x1B[22m\x1B[1m{}\x1B[22m]\x1B[39m\x1B[29m",
-                self.sides, self.result
-            )
-        }
     }
 }
 

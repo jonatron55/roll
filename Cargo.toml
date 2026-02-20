@@ -7,4 +7,6 @@ license = "ISC"
 description = "A simple program to parse and evaluate dice expressions using typical notation"
 
 [dependencies]
-rand = "0.8.5"
+anstream = "1.0.0"
+anstyle = "1.0.13"
+rand = "0.10.0"

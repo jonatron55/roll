@@ -14,7 +14,39 @@ mod tests;
 
 use std::{env, fmt::Display, io::stdout, process::exit};
 
-use parser::parse;
+use anstream::{eprintln, print, println};
+use anstyle::{AnsiColor, Color, Style};
+
+use crate::{eval::DieRoll, parser::parse};
+
+const ERROR: Style = Style::new()
+    .fg_color(Some(Color::Ansi(AnsiColor::Red)))
+    .bold();
+const KEEP: Style = Style::new()
+    .fg_color(Some(Color::Ansi(AnsiColor::Green)))
+    .dimmed();
+const KEEP_DIE: Style = Style::new()
+    .fg_color(Some(Color::Ansi(AnsiColor::Green)))
+    .italic();
+const KEEP_VAL: Style = Style::new()
+    .fg_color(Some(Color::Ansi(AnsiColor::BrightGreen)))
+    .bold();
+const DROP: Style = Style::new()
+    .fg_color(Some(Color::Ansi(AnsiColor::Yellow)))
+    .dimmed()
+    .strikethrough();
+const DROP_DIE: Style = Style::new()
+    .fg_color(Some(Color::Ansi(AnsiColor::Yellow)))
+    .strikethrough()
+    .italic();
+const DROP_VAL: Style = Style::new()
+    .fg_color(Some(Color::Ansi(AnsiColor::BrightYellow)))
+    .bold()
+    .strikethrough();
+const TOTAL: Style = Style::new().dimmed().italic();
+const TOTAL_VAL: Style = Style::new()
+    .fg_color(Some(Color::Ansi(AnsiColor::BrightWhite)))
+    .bold();
 
 fn ok_or_exit<T, E>(result: Result<T, E>) -> T
 where
@@ -23,7 +55,7 @@ where
     match result {
         Ok(value) => value,
         Err(err) => {
-            eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {err}\x1B[39m");
+            eprintln!("{ERROR}Error:{ERROR:#} {err}");
             exit(1);
         }
     }
@@ -33,7 +65,7 @@ fn some_or_exit<T>(option: Option<T>, msg: &str) -> T {
     match option {
         Some(value) => value,
         None => {
-            eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {msg}\x1B[39m");
+            eprintln!("{ERROR}Error:{ERROR:#} {msg}");
             exit(0)
         }
     }
@@ -53,7 +85,7 @@ fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
             arg = args.next();
             eval::Evaluation::Max
         }
-        Some(_) => eval::Evaluation::Rand(rand::thread_rng()),
+        Some(_) => eval::Evaluation::Rand(rand::rng()),
         None => exit(0),
     };
 
@@ -81,14 +113,14 @@ fn eval(mut arg: Option<String>, args: &mut impl Iterator<Item = String>) {
     match result {
         Ok(result) => {
             for roll in evaluator.rolls {
-                print!("{roll} ");
+                print_roll(&roll);
+                print!(" ");
             }
 
-            println!();
-            println!("\x1B[2mtotal = \x1B[22m\x1B[1m{result}\x1B[22m");
+            println!("\n{TOTAL}Total:{TOTAL:#} {TOTAL_VAL}{result}{TOTAL_VAL:#}");
         }
         Err(err) => {
-            eprintln!("\x1B[31m\x1B[1mError:\x1B[22m {err}\x1B[39m");
+            eprintln!("{ERROR}Error:{ERROR:#} {err}");
             exit(1);
         }
     };
@@ -120,6 +152,20 @@ fn graph(lang: Option<String>, args: &mut impl Iterator<Item = String>) {
     };
 
     ok_or_exit(writer.write(root.as_ref()));
+}
+
+fn print_roll(roll: &DieRoll) {
+    let DieRoll {
+        sides,
+        result,
+        keep,
+    } = roll;
+
+    if *keep {
+        print!("{KEEP}[{KEEP:#}{KEEP_DIE}d{sides}{KEEP_DIE:#}{KEEP}:{KEEP:#}{KEEP_VAL}{result}{KEEP_VAL:#}{KEEP}]{KEEP:#}")
+    } else {
+        print!("{DROP}[{DROP:#}{DROP_DIE}d{sides}{DROP_DIE:#}{DROP}:{DROP:#}{DROP_VAL}{result}{DROP_VAL:#}{DROP}]{DROP:#}")
+    }
 }
 
 fn main() {

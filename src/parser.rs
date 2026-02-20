@@ -36,7 +36,7 @@ type Result = std::result::Result<Box<Node>, Error>;
 type ResultOption = std::result::Result<Option<Box<Node>>, Error>;
 
 /// Parse a dice expression into an abstract syntax tree.
-pub fn parse<'a>(input: &'a str) -> Result {
+pub fn parse(input: &str) -> Result {
     let lexer = Lexer::new(input);
     let mut lexer = Lookahead::new(lexer);
     let root = parse_root(&mut lexer)?;
